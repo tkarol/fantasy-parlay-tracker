@@ -30,11 +30,74 @@ export interface Streak {
 
 const NO_STREAK: Streak = { type: null, length: 0 };
 
-/** Identity for grouping. Legacy admin-entered legs have no uid — fall back to name. */
+/** Compare display names ignoring case and spacing. */
+function normalizeName(name: string): string {
+  return name.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+/** Identity for grouping, with no roster to consult. */
 export function legOwnerKey(leg: Leg): string {
   if (leg.uid) return leg.uid;
-  const name = leg.memberName.trim().toLowerCase();
+  const name = normalizeName(leg.memberName);
   return name ? `name:${name}` : `leg:${leg.id}`;
+}
+
+export interface OwnerResolver {
+  /** The canonical key a leg belongs to. */
+  keyOf: (leg: Leg) => string;
+  /** The name to show for a key, preferring the roster's spelling. */
+  nameOf: (key: string, fallback: string) => string;
+  /** The member uid behind a key, when there is one. */
+  uidOf: (key: string) => string;
+}
+
+/**
+ * Resolve legs to one identity per person.
+ *
+ * A member's own submissions carry their uid, but legs an admin entered on
+ * their behalf in the original app carry the *admin's* uid in `createdBy` and
+ * so arrive with no uid at all. Keyed naively that splits one person into two
+ * rows on the leaderboard — which is exactly what happened to this league.
+ *
+ * So identity is resolved against the roster: by uid when that uid is a known
+ * member, otherwise by display name. A name is only trusted when exactly one
+ * member answers to it, so two people sharing a name are never merged.
+ */
+export function createOwnerResolver(roster: readonly Member[] = []): OwnerResolver {
+  const byUid = new Map<string, Member>();
+  const byName = new Map<string, Member | null>();
+
+  for (const member of roster) {
+    byUid.set(member.uid, member);
+
+    const name = normalizeName(member.displayName || member.email || "");
+    if (!name) continue;
+    // A repeated name is ambiguous: record null so it resolves to nobody.
+    byName.set(name, byName.has(name) ? null : member);
+  }
+
+  const keyOf = (leg: Leg): string => {
+    if (leg.uid && byUid.has(leg.uid)) return leg.uid;
+
+    const name = normalizeName(leg.memberName);
+    const matched = name ? byName.get(name) : undefined;
+    if (matched) return matched.uid;
+
+    // Not on the roster: someone who left, or a name nobody answers to.
+    // Prefer the name so their own legs still group together.
+    if (name) return `name:${name}`;
+    return leg.uid ? leg.uid : `leg:${leg.id}`;
+  };
+
+  const nameOf = (key: string, fallback: string): string => {
+    const member = byUid.get(key);
+    if (member) return member.displayName || member.email || fallback;
+    return fallback;
+  };
+
+  const uidOf = (key: string): string => (byUid.has(key) ? key : "");
+
+  return { keyOf, nameOf, uidOf };
 }
 
 export function buildTickets(
@@ -218,11 +281,10 @@ export function buildLeaderboard(
     (a, b) => a.week.season - b.week.season || a.week.week - b.week.week,
   );
 
+  const owner = createOwnerResolver(roster);
   const names = new Map<string, string>();
-  const uids = new Map<string, string>();
   for (const member of roster) {
     names.set(member.uid, member.displayName || member.email || member.uid);
-    uids.set(member.uid, member.uid);
   }
 
   const acc = new Map<
@@ -284,10 +346,9 @@ export function buildLeaderboard(
     if (settlement.settled) settledWeekIds.push(week.id);
 
     for (const leg of legs) {
-      const key = legOwnerKey(leg);
+      const key = owner.keyOf(leg);
       const row = ensure(key);
       if (!names.has(key)) names.set(key, leg.memberName || key);
-      if (leg.uid && !uids.has(key)) uids.set(key, leg.uid);
 
       row.legs += 1;
       row.weeksEntered.add(week.id);
@@ -328,7 +389,7 @@ export function buildLeaderboard(
 
       if (losers.length === 1) {
         const loser = losers[0]!;
-        const key = legOwnerKey(loser);
+        const key = owner.keyOf(loser);
         const row = ensure(key);
         row.soloBusts += 1;
 
@@ -348,7 +409,7 @@ export function buildLeaderboard(
           cost,
         });
       } else if (losers.length > 1) {
-        for (const loser of losers) ensure(legOwnerKey(loser)).sharedBusts += 1;
+        for (const loser of losers) ensure(owner.keyOf(loser)).sharedBusts += 1;
       }
     }
   }
@@ -362,8 +423,9 @@ export function buildLeaderboard(
 
     return {
       key,
-      uid: uids.get(key) ?? "",
-      name: names.get(key) ?? key,
+      uid: owner.uidOf(key),
+      // The roster's spelling wins over whatever a leg happened to record.
+      name: owner.nameOf(key, names.get(key) ?? key),
       legs: row.legs,
       wins: row.wins,
       losses: row.losses,
@@ -479,7 +541,10 @@ export function headToHead(
   tickets: readonly WeekTicket[],
   keyA: string,
   keyB: string,
+  roster: readonly Member[] = [],
 ): HeadToHead {
+  const owner = createOwnerResolver(roster);
+
   let weeksTogether = 0;
   let aWins = 0;
   let bWins = 0;
@@ -487,8 +552,8 @@ export function headToHead(
   let bothLost = 0;
 
   for (const { legs } of tickets) {
-    const a = legs.find((leg) => legOwnerKey(leg) === keyA);
-    const b = legs.find((leg) => legOwnerKey(leg) === keyB);
+    const a = legs.find((leg) => owner.keyOf(leg) === keyA);
+    const b = legs.find((leg) => owner.keyOf(leg) === keyB);
     if (!a || !b) continue;
 
     const aDecided = a.result === "Win" || a.result === "Loss";

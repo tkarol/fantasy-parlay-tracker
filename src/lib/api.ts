@@ -30,7 +30,7 @@ import {
 import { leagueConverter } from "./converters";
 import { makeInviteCode, makeLeagueId, weekId as makeWeekId } from "./rand";
 import { nextThursdaySixPm } from "./dates";
-import type { LegResult, MemberRole, Week } from "../types/models";
+import type { LegResult, Member, MemberRole, Week } from "../types/models";
 
 /**
  * Every Firestore write in the app lives here.
@@ -502,6 +502,135 @@ export async function adminAddLegForMember(
     },
     { merge: true },
   );
+}
+
+// ---------------------------------------------------------------------------
+// Repairing legacy legs
+// ---------------------------------------------------------------------------
+
+export interface LegLinkReport {
+  /** Legs that had no uid and now have one. */
+  linked: number;
+  /** Legs with no uid whose name matched nobody, or matched two people. */
+  unmatched: string[];
+  scanned: number;
+}
+
+function normalizeName(name: string): string {
+  return name.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+/**
+ * Attach a member uid to legs that never had one.
+ *
+ * The original app recorded admin-entered legs under an auto id with the
+ * admin's uid in `createdBy`, so they carry no owner. Stats resolve those by
+ * name, but that breaks the day someone changes their Google display name —
+ * this writes the link into the data so it stops depending on the spelling.
+ *
+ * Read-only on anything it cannot match confidently: a name that answers to
+ * two members is reported rather than guessed at.
+ */
+export async function linkLegacyLegs(
+  leagueId: string,
+  weeks: readonly Week[],
+  members: readonly Member[],
+): Promise<LegLinkReport> {
+  const byName = new Map<string, Member | null>();
+  for (const member of members) {
+    const name = normalizeName(member.displayName || member.email || "");
+    if (!name) continue;
+    byName.set(name, byName.has(name) ? null : member);
+  }
+
+  const report: LegLinkReport = { linked: 0, unmatched: [], scanned: 0 };
+  const pending: { ref: ReturnType<typeof legDoc>; uid: string; name: string }[] = [];
+
+  for (const week of weeks) {
+    const snap = await getDocs(legsCol(leagueId, week.id));
+    for (const legSnap of snap.docs) {
+      report.scanned += 1;
+      const data = legSnap.data();
+      if (typeof data.uid === "string" && data.uid) continue;
+
+      // A legacy member leg keyed by uid already resolves; only the
+      // auto-id ones need repairing.
+      const createdBy = typeof data.createdBy === "string" ? data.createdBy : "";
+      if (createdBy && createdBy === legSnap.id) continue;
+
+      const rawName = typeof data.memberName === "string" ? data.memberName : "";
+      const matched = byName.get(normalizeName(rawName));
+      if (!matched) {
+        if (rawName && !report.unmatched.includes(rawName)) report.unmatched.push(rawName);
+        continue;
+      }
+
+      pending.push({
+        ref: legDoc(leagueId, week.id, legSnap.id),
+        uid: matched.uid,
+        name: matched.displayName || rawName,
+      });
+    }
+  }
+
+  // Firestore caps a batch at 500 writes.
+  for (let i = 0; i < pending.length; i += 400) {
+    const batch = writeBatch(db);
+    for (const item of pending.slice(i, i + 400)) {
+      batch.update(item.ref, { uid: item.uid, memberName: item.name });
+    }
+    await batch.commit();
+    report.linked += Math.min(400, pending.length - i);
+  }
+
+  return report;
+}
+
+export interface UnlinkedScan {
+  /** Ownerless legs whose name matches exactly one member — fixable. */
+  matchable: number;
+  /** Names that match nobody: people who left, or a different spelling. */
+  unmatchedNames: string[];
+}
+
+/**
+ * What the repair could actually achieve.
+ *
+ * Separating matchable from unmatchable matters: a member who left the league
+ * will never match anyone, and counting them as "needs fixing" would leave the
+ * repair permanently on screen with nothing useful to do.
+ */
+export async function scanUnlinkedLegs(
+  leagueId: string,
+  weeks: readonly Week[],
+  members: readonly Member[],
+): Promise<UnlinkedScan> {
+  const byName = new Map<string, Member | null>();
+  for (const member of members) {
+    const name = normalizeName(member.displayName || member.email || "");
+    if (!name) continue;
+    byName.set(name, byName.has(name) ? null : member);
+  }
+
+  const scan: UnlinkedScan = { matchable: 0, unmatchedNames: [] };
+
+  for (const week of weeks) {
+    const snap = await getDocs(legsCol(leagueId, week.id));
+    for (const legSnap of snap.docs) {
+      const data = legSnap.data();
+      if (typeof data.uid === "string" && data.uid) continue;
+      const createdBy = typeof data.createdBy === "string" ? data.createdBy : "";
+      if (createdBy && createdBy === legSnap.id) continue;
+
+      const rawName = typeof data.memberName === "string" ? data.memberName : "";
+      if (byName.get(normalizeName(rawName))) scan.matchable += 1;
+      else if (rawName && !scan.unmatchedNames.includes(rawName)) {
+        scan.unmatchedNames.push(rawName);
+      }
+    }
+  }
+
+  return scan;
 }
 
 // ---------------------------------------------------------------------------

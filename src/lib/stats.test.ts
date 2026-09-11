@@ -10,7 +10,7 @@ import {
   summarizeSeason,
 } from "./stats";
 import { leg, makeWeek } from "./testing";
-import type { Leg, Member, Week } from "../types/models";
+import type { Leg, LegResult, Member, Week } from "../types/models";
 
 function member(uid: string, displayName: string): Member {
   return { uid, role: "member", displayName, email: `${uid}@x.test`, photoURL: null, joinedAt: null };
@@ -269,6 +269,7 @@ describe("headToHead", () => {
       ]),
       "a",
       "b",
+      [member("a", "a"), member("b", "b")],
     );
     expect(h.weeksTogether).toBe(2);
     expect(h.aWins).toBe(1);
@@ -292,5 +293,106 @@ describe("streak helpers", () => {
   it("formats for display", () => {
     expect(formatStreak({ type: "W", length: 3 })).toBe("W3");
     expect(formatStreak({ type: null, length: 0 })).toBe("—");
+  });
+});
+
+describe("one row per person", () => {
+  /*
+   * The original app wrote a member's own legs at legs/{uid}, but legs an admin
+   * entered for them at an auto id with the *admin's* uid in createdBy — so
+   * those arrive with no uid. Keyed naively that splits one person into two
+   * leaderboard rows, which is what this league saw on real data.
+   */
+  function selfSubmitted(uid: string, name: string, result: LegResult): Leg {
+    return { ...leg(uid, 100, result), memberName: name };
+  }
+  function adminEntered(name: string, result: LegResult, id: string): Leg {
+    return { ...leg("", 100, result), id, uid: "", memberName: name };
+  }
+
+  const roster = [member("u1", "Esteban Umana"), member("u2", "Chris M")];
+
+  it("merges admin-entered legs into the member who owns them", () => {
+    const week1 = makeWeek({ week: 1, closed: true });
+    const week2 = makeWeek({ week: 2, closed: true });
+    const { members } = buildLeaderboard(
+      buildTickets([week1, week2], {
+        [week1.id]: [selfSubmitted("u1", "Esteban Umana", "Win")],
+        [week2.id]: [adminEntered("Esteban Umana", "Loss", "auto1")],
+      }),
+      roster,
+    );
+
+    const esteban = members.filter((m) => m.name === "Esteban Umana");
+    expect(esteban).toHaveLength(1);
+    expect(esteban[0]!.legs).toBe(2);
+    expect(esteban[0]!.wins).toBe(1);
+    expect(esteban[0]!.losses).toBe(1);
+  });
+
+  it("matches names regardless of case and spacing", () => {
+    const week = makeWeek({ week: 1, closed: true });
+    const { members } = buildLeaderboard(
+      buildTickets([week], {
+        [week.id]: [
+          selfSubmitted("u2", "Chris M", "Win"),
+          adminEntered("  chris   m ", "Loss", "auto2"),
+        ],
+      }),
+      roster,
+    );
+    expect(members.filter((m) => m.name === "Chris M")).toHaveLength(1);
+    expect(members.find((m) => m.name === "Chris M")!.legs).toBe(2);
+  });
+
+  it("uses the roster's spelling of the name", () => {
+    const week = makeWeek({ week: 1, closed: true });
+    const { members } = buildLeaderboard(
+      buildTickets([week], { [week.id]: [adminEntered("esteban umana", "Win", "auto3")] }),
+      roster,
+    );
+    expect(members.find((m) => m.legs === 1)!.name).toBe("Esteban Umana");
+  });
+
+  it("keeps a streak in chronological order across both kinds of leg", () => {
+    const weeks = [1, 2, 3].map((week) => makeWeek({ week, closed: true }));
+    const { members } = buildLeaderboard(
+      buildTickets(weeks, {
+        [weeks[0]!.id]: [selfSubmitted("u1", "Esteban Umana", "Loss")],
+        [weeks[1]!.id]: [adminEntered("Esteban Umana", "Win", "auto4")],
+        [weeks[2]!.id]: [selfSubmitted("u1", "Esteban Umana", "Win")],
+      }),
+      roster,
+    );
+    // Merging must not concatenate two separate histories — the run is W2.
+    expect(members.find((m) => m.name === "Esteban Umana")!.streak).toEqual({ type: "W", length: 2 });
+  });
+
+  it("never merges two different people who share a name", () => {
+    const week = makeWeek({ week: 1, closed: true });
+    const twins = [member("x1", "Chris M"), member("x2", "Chris M")];
+    const { members } = buildLeaderboard(
+      buildTickets([week], {
+        [week.id]: [selfSubmitted("x1", "Chris M", "Win"), selfSubmitted("x2", "Chris M", "Loss")],
+      }),
+      twins,
+    );
+    expect(members.filter((m) => m.name === "Chris M")).toHaveLength(2);
+  });
+
+  it("still groups a departed member's own legs together", () => {
+    // Not on the roster any more, but their two kinds of leg are still one person.
+    const week1 = makeWeek({ week: 1, closed: true });
+    const week2 = makeWeek({ week: 2, closed: true });
+    const { members } = buildLeaderboard(
+      buildTickets([week1, week2], {
+        [week1.id]: [selfSubmitted("old", "Old Teammate", "Win")],
+        [week2.id]: [adminEntered("Old Teammate", "Loss", "auto5")],
+      }),
+      roster,
+    );
+    const departed = members.filter((m) => m.name === "Old Teammate");
+    expect(departed).toHaveLength(1);
+    expect(departed[0]!.legs).toBe(2);
   });
 });

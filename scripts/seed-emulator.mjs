@@ -198,6 +198,28 @@ async function main() {
 
         const person = PEOPLE[p];
         const uid = uids[person.key];
+
+        /*
+         * Reproduce the real league's data: from 2025 week 9 on, Cy's legs were
+         * typed in by an admin, so they landed at an auto id with no uid and the
+         * admin's uid in createdBy. Keyed naively that splits Cy into two
+         * leaderboard rows.
+         */
+        const enteredByAdmin = season === 2025 && weekNumber >= 9 && person.key === "cy";
+        if (enteredByAdmin) {
+          await setDoc(`leagues/${LEAGUE_ID}/weeks/${weekId}/legs/legacy${season}w${weekNumber}`, {
+            memberName: person.name,
+            leg: PICKS[(index * PEOPLE.length + p) % PICKS.length],
+            odds: ODDS[(index + p) % ODDS.length],
+            result: RESULT_BY_LETTER[letter],
+            season,
+            week: weekNumber,
+            createdBy: uids.ann,
+            createdAt: new Date(seasonStart[season] + index * 7 * 24 * 60 * 60 * 1000 - 3_600_000),
+          });
+          continue;
+        }
+
         // One 2025 leg was never priced, to exercise the unpriced path.
         const unpriced = season === 2025 && weekNumber === 7 && person.key === "cy";
         const legWritten = seasonStart[season] + index * 7 * 24 * 60 * 60 * 1000 - 3_600_000;

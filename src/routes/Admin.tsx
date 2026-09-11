@@ -12,6 +12,7 @@ import {
 } from "../components/ui";
 import { SeasonControls } from "../components/admin/SeasonControls";
 import { MemberAdmin } from "../components/admin/MemberAdmin";
+import { LegLinkRepair } from "../components/admin/LegLinkRepair";
 import { AdminWeekControls } from "../components/tracker/AdminWeekControls";
 import { WeekNav } from "../components/tracker/WeekNav";
 import { useAuth } from "../hooks/useAuth";
@@ -96,6 +97,8 @@ export default function Admin() {
           Grading happens on the ticket itself — this page is for weeks, seasons and people.
         </p>
       </header>
+
+      <LegLinkRepair leagueId={leagueId} weeks={weeks} members={members} />
 
       <MemberAdmin
         leagueId={leagueId}

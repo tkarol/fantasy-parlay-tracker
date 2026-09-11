@@ -128,7 +128,7 @@ describe("compareSeasons", () => {
     ];
     const comparison = compareSeasons(tickets(spec), 2026, 2025);
 
-    const departed = comparison.members.find((m) => m.key === "gone")!;
+    const departed = comparison.members.find((m) => m.name === "gone")!;
     expect(departed.current).toBeNull();
     expect(departed.previous?.legs).toBe(1);
     expect(departed.hitRate.change).toBeNull();
@@ -141,7 +141,7 @@ describe("compareSeasons", () => {
     ];
     const comparison = compareSeasons(tickets(spec), 2026, 2025);
 
-    const rookie = comparison.members.find((m) => m.key === "new")!;
+    const rookie = comparison.members.find((m) => m.name === "new")!;
     expect(rookie.previous).toBeNull();
     expect(rookie.current?.legs).toBe(1);
   });
