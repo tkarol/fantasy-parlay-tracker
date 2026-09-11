@@ -1,0 +1,38 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Make the app fill the viewport */
+html, body, #root {
+  height: 100%;
+  width: 100%;
+}
+
+/* Keep things simple; Tailwind will style the rest */
+:root {
+  color-scheme: light;
+}
+
+/* Reset body quirks from the Vite template */
+body {
+  margin: 0;
+  overflow-x: hidden;   /* prevents right-side whitespace if something overflows */
+  background: #f8fafc;  /* slate-50-ish */
+  color: #0f172a;       /* slate-900-ish */
+  width: 100%;
+}
+
+/* Optional: keep media from overflowing on mobile */
+img, video, canvas, svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* (Optional) Links – let Tailwind classes control color on components */
+a { text-decoration: none; }
+
+/* Remove all the Vite demo styles:
+   - NO body { display:flex; place-items:center; min-height:100vh; }
+   - NO button/a theme overrides
+   - NO dark-mode :root background that fights your app gradient
+*/
