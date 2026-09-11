@@ -108,6 +108,54 @@ emulator) — use `ann@example.test` / `password` for an admin.
 
 ---
 
+## Deploying
+
+`firebase deploy` pushes three things from this repo: the built site
+(`hosting`), the Firestore rules and indexes, and the Storage rules.
+
+### First deploy
+
+1. **Create `.env`** from `.env.example` with your Firebase web config
+   (console → Project settings → Your apps). The build fails if it is missing
+   or incomplete, rather than producing a bundle that white-screens on load.
+
+2. **Enable Storage** in the Firebase console if it has never been used. The
+   `storage` target fails on a project with no bucket. If that blocks you:
+
+   ```bash
+   firebase deploy --only hosting,firestore   # everything except screenshots
+   # enable Storage in the console, then:
+   firebase deploy --only storage
+   ```
+
+   Until the Storage rules are live, ticket screenshot uploads are denied.
+
+3. **Deploy:**
+
+   ```bash
+   npm install
+   firebase login
+   npm run build && firebase deploy
+   ```
+
+4. **Sign in once as an admin.** That first visit records which league this
+   deployment serves, which is what lets everyone else find it and request
+   access.
+
+5. **Approve your members** under Admin. Anyone who signs in before you do this
+   sees "Waiting on an admin".
+
+### Note on rules
+
+If the project was previously in test mode, this is the first deploy that
+actually restricts access. Members need a `members/{uid}` document in the
+league to read anything — which the app has always written on approval, so
+existing members are fine.
+
+The `weeks` collection is ordered by season and week, which needs a composite
+index. `firestore.indexes.json` declares it and the deploy creates it; a newly
+created index takes a few minutes to build, and queries error until it is ready.
+
 ## Data model
 
 ```
