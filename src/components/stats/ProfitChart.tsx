@@ -10,7 +10,7 @@ export interface ProfitPoint {
 }
 
 const HEIGHT = 200;
-const PAD = { top: 18, right: 58, bottom: 26, left: 52 };
+const PAD = { top: 18, right: 74, bottom: 26, left: 64 };
 
 /**
  * Cumulative group profit across the season.
@@ -175,8 +175,9 @@ export function ProfitChart({ points }: { points: ProfitPoint[] }) {
               strokeWidth="2"
             />
             <text
-              x={geometry.x(points.length - 1) + 9}
+              x={Math.min(geometry.x(points.length - 1) + 9, width - 4)}
               y={geometry.y(last.cumulative) + 4}
+              textAnchor={geometry.x(points.length - 1) + 9 > width - 70 ? "end" : "start"}
               className="fill-ink text-[11px] font-semibold"
             >
               {formatUsdSigned(last.cumulative)}

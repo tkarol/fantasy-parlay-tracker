@@ -22,6 +22,12 @@ export const joinRequestsCol = (leagueId: string) =>
 export const joinRequestDoc = (leagueId: string, uid: string) =>
   doc(db, "leagues", leagueId, "joinRequests", uid);
 
+/**
+ * The single league this deployment serves. Readable by any signed-in user so
+ * someone who isn't a member yet can still find the league and ask to join.
+ */
+export const appLeagueDoc = () => doc(db, "appConfig", "league");
+
 /** Public code -> league lookup, so non-members never read league documents. */
 export const inviteCodesCol = () => collection(db, "inviteCodes");
 export const inviteCodeDoc = (code: string) => doc(db, "inviteCodes", code.toUpperCase());

@@ -531,3 +531,168 @@ export function formatStreak(streak: Streak): string {
   if (!streak.type || streak.length === 0) return "—";
   return `${streak.type}${streak.length}`;
 }
+
+// ---------------------------------------------------------------------------
+// Seasons
+// ---------------------------------------------------------------------------
+
+/** Seasons present in the data, newest first. */
+export function seasonsOf(items: readonly { season: number }[]): number[] {
+  return [...new Set(items.map((item) => item.season))].sort((a, b) => b - a);
+}
+
+export function ticketsForSeason(
+  tickets: readonly WeekTicket[],
+  season: number,
+): WeekTicket[] {
+  return tickets.filter((ticket) => ticket.week.season === season);
+}
+
+export interface SeasonRecord {
+  season: number;
+  tickets: WeekTicket[];
+  summary: SeasonSummary;
+  members: MemberStats[];
+  busts: BustEvent[];
+}
+
+/** Everything the stats views need about one season. */
+export function buildSeasonRecord(
+  tickets: readonly WeekTicket[],
+  season: number,
+  roster: readonly Member[] = [],
+): SeasonRecord {
+  const seasonTickets = ticketsForSeason(tickets, season);
+  const { members, busts } = buildLeaderboard(seasonTickets, roster);
+  return {
+    season,
+    tickets: seasonTickets,
+    summary: summarizeSeason(seasonTickets),
+    members,
+    busts,
+  };
+}
+
+export interface MetricDelta {
+  current: number | null;
+  previous: number | null;
+  /** current - previous, or null when either side is missing. */
+  change: number | null;
+}
+
+function delta(current: number | null, previous: number | null): MetricDelta {
+  const change = current !== null && previous !== null ? round2(current - previous) : null;
+  return { current, previous, change };
+}
+
+export interface MemberSeasonComparison {
+  key: string;
+  name: string;
+  current: MemberStats | null;
+  previous: MemberStats | null;
+  hitRate: MetricDelta;
+  legs: MetricDelta;
+  soloBusts: MetricDelta;
+}
+
+export interface SeasonComparison {
+  current: SeasonRecord;
+  previous: SeasonRecord | null;
+  profit: MetricDelta;
+  roi: MetricDelta;
+  hitRate: MetricDelta;
+  weeksSettled: MetricDelta;
+  members: MemberSeasonComparison[];
+}
+
+/**
+ * One season against another.
+ *
+ * Members are unioned across both sides: someone who played last season but
+ * not this one still appears (with a null current side), and vice versa —
+ * dropping them would quietly rewrite history.
+ */
+export function compareSeasons(
+  tickets: readonly WeekTicket[],
+  currentSeason: number,
+  previousSeason: number | null,
+  roster: readonly Member[] = [],
+): SeasonComparison {
+  const current = buildSeasonRecord(tickets, currentSeason, roster);
+  const previous =
+    previousSeason === null ? null : buildSeasonRecord(tickets, previousSeason, roster);
+
+  const currentByKey = new Map(current.members.map((member) => [member.key, member]));
+  const previousByKey = new Map((previous?.members ?? []).map((member) => [member.key, member]));
+
+  const keys = [...new Set([...currentByKey.keys(), ...previousByKey.keys()])];
+
+  const members: MemberSeasonComparison[] = keys
+    .map((key) => {
+      const currentStats = currentByKey.get(key) ?? null;
+      const previousStats = previousByKey.get(key) ?? null;
+      return {
+        key,
+        name: currentStats?.name ?? previousStats?.name ?? key,
+        current: currentStats,
+        previous: previousStats,
+        hitRate: delta(currentStats?.hitRate ?? null, previousStats?.hitRate ?? null),
+        legs: delta(currentStats?.legs ?? null, previousStats?.legs ?? null),
+        soloBusts: delta(currentStats?.soloBusts ?? null, previousStats?.soloBusts ?? null),
+      };
+    })
+    // Anyone with legs this season first, then by name.
+    .sort(
+      (a, b) =>
+        (b.current?.legs ?? 0) - (a.current?.legs ?? 0) || a.name.localeCompare(b.name),
+    );
+
+  return {
+    current,
+    previous,
+    profit: delta(current.summary.profit, previous?.summary.profit ?? null),
+    roi: delta(current.summary.roi, previous?.summary.roi ?? null),
+    hitRate: delta(current.summary.hitRate, previous?.summary.hitRate ?? null),
+    weeksSettled: delta(current.summary.weeksSettled, previous?.summary.weeksSettled ?? null),
+    members,
+  };
+}
+
+export interface AllTimeRecord {
+  seasons: number[];
+  summary: SeasonSummary;
+  members: MemberStats[];
+  /** Per-season profit, oldest first, for the career view. */
+  bySeasonProfit: { season: number; profit: number; weeks: number }[];
+}
+
+export function buildAllTimeRecord(
+  tickets: readonly WeekTicket[],
+  roster: readonly Member[] = [],
+): AllTimeRecord {
+  const seasons = seasonsOf(tickets.map((ticket) => ticket.week));
+  const { members } = buildLeaderboard(tickets, roster);
+
+  const bySeasonProfit = [...seasons]
+    .sort((a, b) => a - b)
+    .map((season) => {
+      const summary = summarizeSeason(ticketsForSeason(tickets, season));
+      return { season, profit: summary.profit, weeks: summary.weeksSettled };
+    });
+
+  return { seasons, summary: summarizeSeason(tickets), members, bySeasonProfit };
+}
+
+/** The season a league should open on by default: the newest with any week. */
+export function defaultSeason(weeks: readonly { season: number }[]): number | null {
+  const seasons = seasonsOf(weeks);
+  return seasons[0] ?? null;
+}
+
+/** Next season number to offer when starting a new year. */
+export function nextSeasonNumber(weeks: readonly { season: number }[]): number {
+  const latest = seasonsOf(weeks)[0];
+  const thisYear = new Date().getFullYear();
+  if (latest === undefined) return thisYear;
+  return Math.max(latest + 1, thisYear);
+}

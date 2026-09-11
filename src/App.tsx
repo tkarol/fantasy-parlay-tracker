@@ -1,19 +1,19 @@
-import { Outlet, Route, Routes } from "react-router-dom";
+import { Navigate, Outlet, Route, Routes } from "react-router-dom";
 import { NavBar } from "./components/NavBar";
-import Home from "./routes/Home";
-import Dashboard from "./routes/Dashboard";
-import CreateLeague from "./routes/CreateLeague";
-import JoinLeague from "./routes/JoinLeague";
-import League from "./routes/League";
-import LeagueSettings from "./routes/LeagueSettings";
-import NotFound from "./routes/NotFound";
+import { AccessGate } from "./components/AccessGate";
+import { LeagueProvider } from "./providers/LeagueProvider";
+import ThisWeek from "./routes/ThisWeek";
+import Stats from "./routes/Stats";
+import Admin from "./routes/Admin";
 
 function Layout() {
   return (
     <div className="min-h-screen bg-surface-2">
       <NavBar />
       <main>
-        <Outlet />
+        <AccessGate>
+          <Outlet />
+        </AccessGate>
       </main>
     </div>
   );
@@ -21,18 +21,27 @@ function Layout() {
 
 export default function App() {
   return (
-    <Routes>
-      <Route element={<Layout />}>
-        <Route index element={<Home />} />
-        <Route path="dashboard" element={<Dashboard />} />
-        <Route path="create" element={<CreateLeague />} />
-        <Route path="join" element={<JoinLeague />} />
-        <Route path="league/:leagueId" element={<League />} />
-        <Route path="league/:leagueId/settings" element={<LeagueSettings />} />
-        {/* The old /tracker deep link now lands on the league itself. */}
-        <Route path="league/:leagueId/tracker" element={<League />} />
-        <Route path="*" element={<NotFound />} />
-      </Route>
-    </Routes>
+    <LeagueProvider>
+      <Routes>
+        <Route element={<Layout />}>
+          <Route index element={<ThisWeek />} />
+          <Route path="stats" element={<Stats />} />
+          <Route path="admin" element={<Admin />} />
+
+          {/*
+            The app used to host many leagues. Those paths still exist in
+            people's history and bookmarks, so they land on the one league
+            rather than a dead end.
+          */}
+          <Route path="dashboard" element={<Navigate to="/" replace />} />
+          <Route path="create" element={<Navigate to="/" replace />} />
+          <Route path="join" element={<Navigate to="/" replace />} />
+          <Route path="league/:leagueId" element={<Navigate to="/" replace />} />
+          <Route path="league/:leagueId/tracker" element={<Navigate to="/" replace />} />
+          <Route path="league/:leagueId/settings" element={<Navigate to="/admin" replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Route>
+      </Routes>
+    </LeagueProvider>
   );
 }

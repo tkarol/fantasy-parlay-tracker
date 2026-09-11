@@ -8,6 +8,7 @@ rules_version = '2';
 //       legs/{uid}                            one leg per member (doc id IS the member uid)
 //     joinRequests/{uid}                      pending access requests
 //   inviteCodes/{CODE}                        public code -> leagueId lookup
+//   appConfig/league                          which league this deployment serves
 //
 // Principles enforced below:
 //   * League contents are visible to members only. Non-members resolve an invite
@@ -87,6 +88,20 @@ service cloud.firestore {
 
     function ownerUidOf(leagueId) {
       return exists(leagueRef(leagueId)) ? leagueData(leagueId).ownerUid : '';
+    }
+
+    // ---------- app config ----------
+    // A single-league deployment records which league it serves, so someone
+    // who is not a member yet can still find it and ask to be let in. It holds
+    // nothing but a league id and display name.
+
+    match /appConfig/{docId} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create, update: if signedIn()
+        && request.resource.data.leagueId is string
+        && canAdmin(request.resource.data.leagueId);
+      allow delete: if false;
     }
 
     // ---------- invite codes ----------

@@ -16,6 +16,7 @@ import { deleteObject, getDownloadURL, ref, uploadBytesResumable } from "firebas
 import type { User } from "firebase/auth";
 import { db, storage } from "../firebase";
 import {
+  appLeagueDoc,
   inviteCodeDoc,
   joinRequestDoc,
   joinRequestsCol,
@@ -129,6 +130,34 @@ export async function rotateInviteCode(leagueId: string, leagueName: string): Pr
     );
   }
   return code;
+}
+
+// ---------------------------------------------------------------------------
+// Single-league deployment
+// ---------------------------------------------------------------------------
+
+export interface AppLeague {
+  leagueId: string;
+  leagueName: string;
+}
+
+/** Which league this deployment serves, if one has been recorded. */
+export async function getAppLeague(): Promise<AppLeague | null> {
+  const snap = await getDoc(appLeagueDoc());
+  if (!snap.exists()) return null;
+  const data = snap.data();
+  const leagueId = typeof data.leagueId === "string" ? data.leagueId : "";
+  if (!leagueId) return null;
+  return { leagueId, leagueName: typeof data.leagueName === "string" ? data.leagueName : "" };
+}
+
+/**
+ * Record the league this deployment serves. Admin-gated by the rules, and
+ * called automatically the first time an admin opens the app so the app needs
+ * no build-time configuration to work.
+ */
+export async function setAppLeague(leagueId: string, leagueName: string): Promise<void> {
+  await setDoc(appLeagueDoc(), { leagueId, leagueName, updatedAt: serverTimestamp() });
 }
 
 // ---------------------------------------------------------------------------
@@ -294,6 +323,22 @@ export async function createWeek(
     { merge: true },
   );
   return id;
+}
+
+/**
+ * Open a new season at week 1.
+ *
+ * Seasons are just a field on the week document, so starting a year is simply
+ * creating its first week — nothing about the previous season is touched, and
+ * its history stays intact and comparable.
+ */
+export async function startSeason(
+  leagueId: string,
+  season: number,
+  stake: number,
+  deadline?: Date | null,
+): Promise<string> {
+  return createWeek(leagueId, { season, week: 1, stake, deadline: deadline ?? null });
 }
 
 export type WeekPatch = Partial<

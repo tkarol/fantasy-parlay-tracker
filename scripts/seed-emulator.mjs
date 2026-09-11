@@ -64,7 +64,6 @@ async function createUser(email, displayName) {
 }
 
 const LEAGUE_ID = "sunday-degenerates-seed";
-const SEASON = 2025;
 
 const PEOPLE = [
   { key: "ann", name: "Ann Alvarez", role: "admin" },
@@ -73,40 +72,54 @@ const PEOPLE = [
   { key: "dave", name: "Dave Okafor", role: "member" },
 ];
 
+const PICKS = [
+  "Bills -3.5", "Chiefs ML", "Over 47.5", "Lions +2.5", "Eagles -7", "Under 44",
+  "Ravens ML", "Jets +6.5", "Cowboys -1", "Over 51", "49ers -6", "Packers ML",
+  "Dolphins -3", "Bengals -3", "Texans +1.5", "Rams ML", "Under 40.5", "Giants +7",
+  "Broncos -2", "Seahawks -4.5", "Vikings -1.5", "Saints +3", "Bears ML", "Jaguars +4",
+];
+
+const ODDS = [-110, -140, -105, 120, -120, -115, -160, 105, 100, -130, 140, -108];
+
 /**
- * Six weeks covering every case the settlement logic has to handle:
- * a clean win, a solo bust, a multi-loss ticket, a push that re-prices the
- * rest, an unpriced leg, and a live week still taking legs.
+ * Two seasons, shaped like the league's real history: a 2025 that ran twelve
+ * weeks and then stopped, and a 2026 that has just started.
+ *
+ * Results are hand-specified rather than random so the figures on screen can be
+ * checked against arithmetic. Each character is one member's result in PEOPLE
+ * order - W win, L loss, P push, ? pending, "." not submitted.
  */
-const WEEKS = [
+const SEASONS = [
   {
-    week: 1, stake: 5, closed: true,
-    legs: { ann: ["Bills -3.5", -110, "Win"], bo: ["Chiefs ML", -140, "Win"], cy: ["Over 47.5", -105, "Win"], dave: ["Lions +2.5", 120, "Win"] },
+    season: 2025,
+    stake: 5,
+    weeks: [
+      "WWWW", // 1  clean win
+      "WWWL", // 2  Dave alone breaks it
+      "LWLW", // 3  two losses, so blame is shared
+      "WPWW", // 4  Bo pushes - that leg drops out and the rest re-price
+      "WWWL", // 5  Dave again
+      "WWWW", // 6  clean win
+      "LWWW", // 7  Ann alone
+      "WWLW", // 8  Cy alone
+      "WWWW", // 9  clean win
+      "WLWW", // 10 Bo alone
+      "WWPW", // 11 Cy pushes, the rest win
+      "WWWL", // 12 Dave alone - and then they stopped playing
+    ],
   },
   {
-    week: 2, stake: 5, closed: true,
-    // Dave alone breaks an otherwise perfect ticket.
-    legs: { ann: ["Eagles -7", -120, "Win"], bo: ["Under 44", -110, "Win"], cy: ["Ravens ML", -160, "Win"], dave: ["Jets +6.5", 105, "Loss"] },
-  },
-  {
-    week: 3, stake: 10, closed: true,
-    legs: { ann: ["Cowboys -1", -115, "Loss"], bo: ["Over 51", -110, "Win"], cy: ["49ers -6", -130, "Loss"], dave: ["Packers ML", 140, "Win"] },
-  },
-  {
-    week: 4, stake: 10, closed: true,
-    // Bo's leg pushes and is removed from the price entirely.
-    legs: { ann: ["Dolphins -3", -110, "Win"], bo: ["Bengals -3", -110, "Push"], cy: ["Over 45.5", -108, "Win"], dave: ["Texans +1.5", 100, "Win"] },
-  },
-  {
-    week: 5, stake: 10, closed: true,
-    // Cy never recorded a price — the ticket can't be valued.
-    legs: { ann: ["Rams ML", -125, "Win"], bo: ["Under 40.5", -115, "Win"], cy: ["Giants +7", null, "Win"], dave: ["Broncos -2", -110, "Loss"] },
-  },
-  {
-    week: 6, stake: 10, closed: false, live: true,
-    legs: { ann: ["Seahawks -4.5", -110, "Pending"], bo: ["Over 48", -105, "Pending"] },
+    season: 2026,
+    stake: 10,
+    weeks: [
+      "WWWW", // 1  strong start to the new year
+      "WWLW", // 2  Cy alone
+      "??..", // 3  live: only Ann and Bo are in so far
+    ],
   },
 ];
+
+const RESULT_BY_LETTER = { W: "Win", L: "Loss", P: "Push", "?": "Pending" };
 
 async function main() {
   console.log(`Seeding ${PROJECT} emulators…`);
@@ -128,6 +141,12 @@ async function main() {
     createdAt: new Date("2025-09-01T12:00:00Z"),
   });
 
+  // Single-league deployment marker, so a non-member can find the league.
+  await setDoc("appConfig/league", {
+    leagueId: LEAGUE_ID,
+    leagueName: "Sunday Degenerates",
+  });
+
   await setDoc("inviteCodes/SEED01", {
     code: "SEED01",
     leagueId: LEAGUE_ID,
@@ -145,49 +164,68 @@ async function main() {
     });
   }
 
-  for (const spec of WEEKS) {
-    const weekId = `${SEASON}-${spec.week}`;
-    // Week 1 locks on 4 Sep 2025, one week apart thereafter.
-    const SEASON_START = Date.UTC(2025, 8, 4, 22, 0, 0);
-    const deadline = spec.live
-      ? new Date(Date.now() + 36 * 60 * 60 * 1000)
-      : new Date(SEASON_START + (spec.week - 1) * 7 * 24 * 60 * 60 * 1000);
+  // Week 1 of each season locks in early September; each week is seven days on.
+  const seasonStart = {
+    2025: Date.UTC(2025, 8, 4, 22, 0, 0),
+    2026: Date.UTC(2026, 8, 3, 22, 0, 0),
+  };
 
-    await setDoc(`leagues/${LEAGUE_ID}/weeks/${weekId}`, {
-      season: SEASON,
-      week: spec.week,
-      stake: spec.stake,
-      deadline,
-      closed: spec.closed,
-      createdAt: new Date("2025-09-01T12:00:00Z"),
-      ...(spec.closed ? { closedAt: deadline } : {}),
-    });
+  for (const { season, stake, weeks } of SEASONS) {
+    for (let index = 0; index < weeks.length; index += 1) {
+      const weekNumber = index + 1;
+      const weekId = `${season}-${weekNumber}`;
+      const letters = weeks[index];
+      const live = letters.includes("?");
 
-    for (const [key, [text, odds, result]] of Object.entries(spec.legs)) {
-      const uid = uids[key];
-      await setDoc(`leagues/${LEAGUE_ID}/weeks/${weekId}/legs/${uid}`, {
-        uid,
-        memberName: PEOPLE.find((p) => p.key === key).name,
-        leg: text,
-        odds: odds === null ? "" : odds,
-        result,
-        season: SEASON,
-        week: spec.week,
-        createdBy: uid,
-        createdAt: new Date("2025-09-02T12:00:00Z"),
-        updatedAt: new Date("2025-09-02T12:00:00Z"),
+      const deadline = live
+        ? new Date(Date.now() + 36 * 60 * 60 * 1000)
+        : new Date(seasonStart[season] + index * 7 * 24 * 60 * 60 * 1000);
+
+      await setDoc(`leagues/${LEAGUE_ID}/weeks/${weekId}`, {
+        season,
+        week: weekNumber,
+        stake,
+        deadline,
+        closed: !live,
+        createdAt: new Date(seasonStart[season] - 86_400_000),
+        ...(live ? {} : { closedAt: deadline }),
       });
+
+      for (let p = 0; p < PEOPLE.length; p += 1) {
+        const letter = letters[p];
+        // "." marks a member who simply has not submitted yet.
+        if (!letter || letter === ".") continue;
+
+        const person = PEOPLE[p];
+        const uid = uids[person.key];
+        // One 2025 leg was never priced, to exercise the unpriced path.
+        const unpriced = season === 2025 && weekNumber === 7 && person.key === "cy";
+        const legWritten = seasonStart[season] + index * 7 * 24 * 60 * 60 * 1000 - 3_600_000;
+
+        await setDoc(`leagues/${LEAGUE_ID}/weeks/${weekId}/legs/${uid}`, {
+          uid,
+          memberName: person.name,
+          leg: PICKS[(index * PEOPLE.length + p) % PICKS.length],
+          odds: unpriced ? "" : ODDS[(index + p) % ODDS.length],
+          result: RESULT_BY_LETTER[letter],
+          season,
+          week: weekNumber,
+          createdBy: uid,
+          createdAt: new Date(legWritten),
+          updatedAt: new Date(legWritten),
+        });
+      }
     }
   }
 
   // A legacy-shaped leg: no uid field, auto id, createdBy pointing at the
   // admin who typed it in. Exercises the back-compat path in the converters.
-  await setDoc(`leagues/${LEAGUE_ID}/weeks/${SEASON}-3/legs/legacyAutoId01`, {
+  await setDoc(`leagues/${LEAGUE_ID}/weeks/2025-3/legs/legacyAutoId01`, {
     memberName: "Old Teammate",
     leg: "Titans +3 (entered by admin)",
     odds: 110,
     result: "Loss",
-    season: SEASON,
+    season: 2025,
     week: 3,
     createdBy: ownerUid,
     createdAt: new Date("2025-09-16T12:00:00Z"),

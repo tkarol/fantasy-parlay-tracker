@@ -324,3 +324,44 @@ describe("invite codes", () => {
     );
   });
 });
+
+describe("single-league config", () => {
+  it("is readable by any signed-in user, so a non-member can find the league", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "appConfig", "league"), {
+        leagueId: LEAGUE,
+        leagueName: "Test League",
+      });
+    });
+    await assertSucceeds(getDoc(doc(as(OUTSIDER), "appConfig", "league")));
+  });
+
+  it("is not readable anonymously", async () => {
+    await assertFails(getDoc(doc(as(null), "appConfig", "league")));
+  });
+
+  it("can be written by an admin of the league it names", async () => {
+    await assertSucceeds(
+      setDoc(doc(as(ADMIN), "appConfig", "league"), {
+        leagueId: LEAGUE,
+        leagueName: "Test League",
+      }),
+    );
+  });
+
+  // Otherwise anyone could redirect the whole deployment at a league of theirs.
+  it("cannot be pointed at a league the writer does not administer", async () => {
+    await assertFails(
+      setDoc(doc(as(MEMBER), "appConfig", "league"), {
+        leagueId: LEAGUE,
+        leagueName: "Test League",
+      }),
+    );
+    await assertFails(
+      setDoc(doc(as(OUTSIDER), "appConfig", "league"), {
+        leagueId: LEAGUE,
+        leagueName: "Hijacked",
+      }),
+    );
+  });
+});
