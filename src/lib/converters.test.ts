@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { QueryDocumentSnapshot } from "firebase/firestore";
-import { legConverter, leagueConverter, weekConverter } from "./converters";
+import { legConverter, leagueConverter, readTicketImage, weekConverter } from "./converters";
 
 /** Minimal stand-in: the converters only touch `id` and `data()`. */
 function snap(id: string, data: Record<string, unknown>): QueryDocumentSnapshot {
@@ -73,5 +73,40 @@ describe("legacy document tolerance", () => {
     expect(leg.leg).toBe("");
     expect(leg.odds).toBeNull();
     expect(leg.createdAt).toBeNull();
+  });
+});
+
+describe("ticket screenshot compatibility", () => {
+  it("reads a current image stored as a data URL", () => {
+    const image = readTicketImage({
+      src: "data:image/jpeg;base64,abc",
+      width: 800,
+      height: 1200,
+      bytes: 27,
+      uploadedByUid: "u1",
+      uploadedByName: "Ann",
+    });
+    expect(image?.src).toBe("data:image/jpeg;base64,abc");
+    expect(image?.width).toBe(800);
+  });
+
+  it("still reads a screenshot left behind by the Cloud Storage version", () => {
+    // v2 wrote { path, url } onto the week document instead of its own doc.
+    const image = readTicketImage({
+      path: "leagues/x/weeks/2025-1/tickets/u1/ticket.jpg",
+      url: "https://firebasestorage.googleapis.com/v0/b/x/o/ticket.jpg",
+      width: 900,
+      height: 1400,
+      uploadedByUid: "u1",
+      uploadedByName: "Ann",
+    });
+    expect(image?.src).toBe("https://firebasestorage.googleapis.com/v0/b/x/o/ticket.jpg");
+    expect(image?.height).toBe(1400);
+  });
+
+  it("is null when there is no image at all", () => {
+    expect(readTicketImage(null)).toBeNull();
+    expect(readTicketImage({})).toBeNull();
+    expect(readTicketImage({ width: 10 })).toBeNull();
   });
 });

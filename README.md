@@ -82,7 +82,7 @@ npm run dev
 | `npm run lint` | ESLint |
 | `npm test` | Vitest (domain logic) |
 | `npm run test:rules` | Security-rules tests (needs the emulator running) |
-| `npm run emulators` | Local Auth + Firestore + Storage emulators |
+| `npm run emulators` | Local Auth + Firestore emulators |
 | `npm run seed` | Seed the emulators with a realistic league |
 | `npm run dev:emulated` | Dev server pointed at the emulators |
 | `npm run deploy` | Build and deploy hosting + rules |
@@ -110,8 +110,9 @@ emulator) — use `ann@example.test` / `password` for an admin.
 
 ## Deploying
 
-`firebase deploy` pushes three things from this repo: the built site
-(`hosting`), the Firestore rules and indexes, and the Storage rules.
+`firebase deploy` pushes two things from this repo: the built site (`hosting`)
+and the Firestore rules and indexes. There is nothing to deploy for Cloud
+Storage — screenshots live in Firestore, so the project stays on the free plan.
 
 ### First deploy
 
@@ -119,18 +120,7 @@ emulator) — use `ann@example.test` / `password` for an admin.
    (console → Project settings → Your apps). The build fails if it is missing
    or incomplete, rather than producing a bundle that white-screens on load.
 
-2. **Enable Storage** in the Firebase console if it has never been used. The
-   `storage` target fails on a project with no bucket. If that blocks you:
-
-   ```bash
-   firebase deploy --only hosting,firestore   # everything except screenshots
-   # enable Storage in the console, then:
-   firebase deploy --only storage
-   ```
-
-   Until the Storage rules are live, ticket screenshot uploads are denied.
-
-3. **Deploy:**
+2. **Deploy:**
 
    ```bash
    npm install
@@ -138,11 +128,11 @@ emulator) — use `ann@example.test` / `password` for an admin.
    npm run build && firebase deploy
    ```
 
-4. **Sign in once as an admin.** That first visit records which league this
+3. **Sign in once as an admin.** That first visit records which league this
    deployment serves, which is what lets everyone else find it and request
    access.
 
-5. **Approve your members** under Admin. Anyone who signs in before you do this
+4. **Approve your members** under Admin. Anyone who signs in before you do this
    sees "Waiting on an admin".
 
 ### Note on rules
@@ -162,8 +152,9 @@ created index takes a few minutes to build, and queries error until it is ready.
 leagues/{leagueId}                   name, ownerUid, memberUids[], defaultStake
   members/{uid}                      role: admin | member, displayName, email
   weeks/{season}-{week}              season, week, stake, deadline, closed,
-                                     ticketImage, payoutOverride
+                                     payoutOverride
     legs/{uid}                       leg, odds, result, memberName
+    media/ticket                     screenshot of the real ticket
   joinRequests/{uid}                 pending access requests
 appConfig/league                     which league this deployment serves
 inviteCodes/{CODE}                   legacy code → leagueId lookup
@@ -183,8 +174,8 @@ structural rather than enforced by a check.
 
 ## Security
 
-Rules live in `firestore.rules` and `storage.rules` and are deployed with
-`npm run deploy:rules`. In summary:
+Rules live in `firestore.rules` and are deployed with `npm run deploy:rules`.
+In summary:
 
 - League contents are visible to members only.
 - A member may write **only their own leg**, **only** on an open pre-deadline
@@ -195,13 +186,21 @@ Rules live in `firestore.rules` and `storage.rules` and are deployed with
 - `appConfig/league` is readable by any signed-in user but writable only by an
   admin of the league it names — otherwise anyone could repoint the deployment
   at a league of their own.
+- The ticket screenshot is written only by a league admin and read only by its
+  members, with a size cap enforced in the rules.
 
-**Storage caveat, by design:** Storage rules cannot query Firestore, so league
-membership is not checkable there. Ticket uploads are namespaced by uploader
-uid and capped by size and content type, and an upload stays inert until an
-admin points the week document at it — and *that* write is admin-gated by
-`firestore.rules`. The worst a signed-in non-member can do is store an image in
-a folder nobody reads.
+**Ticket screenshots are stored in Firestore, not Cloud Storage.** Storage
+requires a billing plan, and its rules cannot read Firestore — so they could
+never tell a league admin from any signed-in stranger. In Firestore that check
+is direct: only an admin of the league can write the image, and only its
+members can read it.
+
+The cost is Firestore's 1 MiB document limit. The browser resizes and
+re-encodes before saving, stepping quality down and then dimensions until the
+image fits, so a 5 MB phone screenshot lands around 200 KB. The image is kept
+in its own document under the week (`weeks/{weekId}/media/ticket`) so that
+subscribing to a whole season never pulls image bytes for weeks nobody is
+looking at.
 
 The Firebase web config in `.env` is not a secret; access is enforced by the
 rules above. `.env` is gitignored regardless.

@@ -365,3 +365,66 @@ describe("single-league config", () => {
     );
   });
 });
+
+describe("ticket screenshot", () => {
+  const imagePath = (week: string) =>
+    ["leagues", LEAGUE, "weeks", week, "media", "ticket"] as const;
+
+  const image = (src = "data:image/jpeg;base64,abc123") => ({
+    src,
+    width: 800,
+    height: 1200,
+    bytes: src.length,
+    uploadedByUid: ADMIN,
+    uploadedByName: "Admin",
+  });
+
+  it("can be set by an admin", async () => {
+    await assertSucceeds(setDoc(doc(as(ADMIN), ...imagePath(OPEN_WEEK)), image()));
+  });
+
+  // This is the check Cloud Storage rules could not perform at all.
+  it("cannot be set by an ordinary member", async () => {
+    await assertFails(setDoc(doc(as(MEMBER), ...imagePath(OPEN_WEEK)), image()));
+  });
+
+  it("cannot be set by a non-member", async () => {
+    await assertFails(setDoc(doc(as(OUTSIDER), ...imagePath(OPEN_WEEK)), image()));
+  });
+
+  it("is readable by members but not outsiders", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), ...imagePath(OPEN_WEEK)), image());
+    });
+    await assertSucceeds(getDoc(doc(as(MEMBER), ...imagePath(OPEN_WEEK))));
+    await assertFails(getDoc(doc(as(OUTSIDER), ...imagePath(OPEN_WEEK))));
+  });
+
+  it("refuses an image close to the document limit", async () => {
+    const huge = `data:image/jpeg;base64,${"a".repeat(950_000)}`;
+    await assertFails(setDoc(doc(as(ADMIN), ...imagePath(OPEN_WEEK)), image(huge)));
+  });
+
+  it("refuses a src that is not an image", async () => {
+    await assertFails(
+      setDoc(doc(as(ADMIN), ...imagePath(OPEN_WEEK)), image("javascript:alert(1)")),
+    );
+    await assertFails(
+      setDoc(doc(as(ADMIN), ...imagePath(OPEN_WEEK)), image("data:text/html,<script>")),
+    );
+  });
+
+  it("only accepts the ticket document id", async () => {
+    await assertFails(
+      setDoc(doc(as(ADMIN), "leagues", LEAGUE, "weeks", OPEN_WEEK, "media", "other"), image()),
+    );
+  });
+
+  it("can be removed by an admin but not a member", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), ...imagePath(OPEN_WEEK)), image());
+    });
+    await assertFails(deleteDoc(doc(as(MEMBER), ...imagePath(OPEN_WEEK))));
+    await assertSucceeds(deleteDoc(doc(as(ADMIN), ...imagePath(OPEN_WEEK))));
+  });
+});

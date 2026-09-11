@@ -32,12 +32,12 @@ export const appLeagueDoc = () => doc(db, "appConfig", "league");
 export const inviteCodesCol = () => collection(db, "inviteCodes");
 export const inviteCodeDoc = (code: string) => doc(db, "inviteCodes", code.toUpperCase());
 
-/** Storage path for a ticket screenshot, namespaced by uploader. */
-export function ticketImagePath(
-  leagueId: string,
-  weekId: string,
-  uploaderUid: string,
-  fileName: string,
-): string {
-  return `leagues/${leagueId}/weeks/${weekId}/tickets/${uploaderUid}/${fileName}`;
-}
+/**
+ * The week's ticket screenshot, in its own document.
+ *
+ * Kept out of the week document on purpose: the app subscribes to every week
+ * at once, and an image embedded there would be pulled down on every one of
+ * those reads.
+ */
+export const ticketImageDoc = (leagueId: string, weekId: string) =>
+  doc(db, "leagues", leagueId, "weeks", weekId, "media", "ticket");

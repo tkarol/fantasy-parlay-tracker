@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState, type DragEvent } from "react";
+import { useRef, useState, type DragEvent } from "react";
 import type { User } from "firebase/auth";
-import { Button, ConfirmDialog, EmptyState, Modal } from "../ui";
+import { Button, ConfirmDialog, EmptyState, Modal, Skeleton } from "../ui";
 import { useToast } from "../../hooks/useToast";
-import { removeTicketImage, uploadTicketImage } from "../../lib/api";
+import { useTicketImage } from "../../hooks/useTicketImage";
+import { removeTicketImage, saveTicketImage } from "../../lib/api";
 import { formatBytes, prepareTicketImage, type PreparedImage } from "../../lib/image";
 import { formatDateTime } from "../../lib/dates";
 import type { TicketImage, Week } from "../../types/models";
@@ -11,9 +12,7 @@ import { cn } from "../../lib/cn";
 /**
  * The real sportsbook ticket for a week.
  *
- * Admin-only: the Firestore write that points the week at an uploaded image is
- * gated by firestore.rules, which is where the admin check has to live —
- * storage rules cannot read Firestore.
+ * Admin-only, enforced by firestore.rules on the image document itself.
  */
 export function TicketScreenshot({
   leagueId,
@@ -27,62 +26,52 @@ export function TicketScreenshot({
   isAdmin: boolean;
 }) {
   const toast = useToast();
-  const image = week.ticketImage;
+  const { image, loading } = useTicketImage(leagueId, week);
 
   const [prepared, setPrepared] = useState<PreparedImage | null>(null);
-  const [progress, setProgress] = useState<number | null>(null);
+  const [working, setWorking] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
-  const [removing, setRemoving] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  // Object URLs leak until revoked.
-  useEffect(() => {
-    return () => {
-      if (prepared) URL.revokeObjectURL(prepared.previewUrl);
-    };
-  }, [prepared]);
 
   async function onFiles(files: FileList | null) {
     const file = files?.[0];
     if (!file) return;
+    setWorking(true);
     try {
-      const next = await prepareTicketImage(file);
-      setPrepared((current) => {
-        if (current) URL.revokeObjectURL(current.previewUrl);
-        return next;
-      });
+      setPrepared(await prepareTicketImage(file));
     } catch (error) {
-      toast.error("Couldn't read that image", (error as Error)?.message);
+      toast.error("Couldn't use that image", (error as Error)?.message);
+    } finally {
+      setWorking(false);
     }
   }
 
-  async function onUpload() {
+  async function onSave() {
     if (!prepared || !user) return;
-    setProgress(0);
+    setWorking(true);
     try {
-      await uploadTicketImage(leagueId, week.id, user, prepared, setProgress);
-      URL.revokeObjectURL(prepared.previewUrl);
+      await saveTicketImage(leagueId, week.id, user, prepared);
       setPrepared(null);
       toast.success("Ticket screenshot saved");
     } catch (error) {
-      toast.error("Upload failed", (error as Error)?.message);
+      toast.error("Couldn't save that screenshot", messageFor(error));
     } finally {
-      setProgress(null);
+      setWorking(false);
     }
   }
 
   async function onRemove() {
-    setRemoving(true);
+    setWorking(true);
     try {
-      await removeTicketImage(leagueId, week.id, image);
+      await removeTicketImage(leagueId, week.id);
       toast.success("Screenshot removed");
       setConfirmRemove(false);
     } catch (error) {
-      toast.error("Couldn't remove the screenshot", (error as Error)?.message);
+      toast.error("Couldn't remove the screenshot", messageFor(error));
     } finally {
-      setRemoving(false);
+      setWorking(false);
     }
   }
 
@@ -92,7 +81,36 @@ export function TicketScreenshot({
     void onFiles(event.dataTransfer.files);
   }
 
-  if (image && !prepared) {
+  if (loading && !prepared) return <Skeleton className="h-48 w-full" />;
+
+  // A freshly picked image takes over until it is saved or discarded.
+  if (prepared) {
+    return (
+      <div className="space-y-3">
+        <img
+          src={prepared.dataUrl}
+          alt="Selected ticket screenshot preview"
+          className="mx-auto max-h-72 w-auto rounded-xl border border-line object-contain"
+        />
+        <p className="text-xs text-ink-faint">
+          {prepared.width}×{prepared.height} · {formatBytes(prepared.encodedBytes)}
+          {prepared.originalBytes > prepared.encodedBytes && (
+            <> (from {formatBytes(prepared.originalBytes)})</>
+          )}
+        </p>
+        <div className="flex gap-2">
+          <Button variant="primary" onClick={onSave} loading={working}>
+            Save screenshot
+          </Button>
+          <Button variant="ghost" disabled={working} onClick={() => setPrepared(null)}>
+            Cancel
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (image) {
     return (
       <>
         <figure className="space-y-2">
@@ -103,7 +121,7 @@ export function TicketScreenshot({
             aria-label="View the full ticket screenshot"
           >
             <img
-              src={image.url}
+              src={image.src}
               alt={`Parlay ticket for week ${week.week}`}
               loading="lazy"
               className="mx-auto max-h-96 w-auto object-contain transition hover:opacity-90"
@@ -134,9 +152,9 @@ export function TicketScreenshot({
           open={confirmRemove}
           title="Remove this screenshot?"
           destructive
-          busy={removing}
+          busy={working}
           confirmLabel="Remove"
-          message="The image will be deleted for everyone in the league."
+          message="The image is deleted for everyone in the league."
           onConfirm={onRemove}
           onCancel={() => setConfirmRemove(false)}
         />
@@ -149,57 +167,8 @@ export function TicketScreenshot({
       <EmptyState
         icon="📷"
         title="No ticket screenshot yet"
-        description="An admin can upload a photo of the real ticket once it's placed."
+        description="An admin can add a photo of the real ticket once it's placed."
       />
-    );
-  }
-
-  if (prepared) {
-    return (
-      <div className="space-y-3">
-        <img
-          src={prepared.previewUrl}
-          alt="Selected ticket screenshot preview"
-          className="mx-auto max-h-72 w-auto rounded-xl border border-line object-contain"
-        />
-        <p className="text-xs text-ink-faint">
-          {prepared.width}×{prepared.height} · {formatBytes(prepared.blob.size)}
-          {prepared.originalBytes > prepared.blob.size && (
-            <> (compressed from {formatBytes(prepared.originalBytes)})</>
-          )}
-        </p>
-
-        {progress !== null && (
-          <div
-            className="h-1.5 w-full overflow-hidden rounded-full bg-surface-3"
-            role="progressbar"
-            aria-valuenow={Math.round(progress * 100)}
-            aria-valuemin={0}
-            aria-valuemax={100}
-          >
-            <div
-              className="h-full bg-brand transition-[width]"
-              style={{ width: `${Math.round(progress * 100)}%` }}
-            />
-          </div>
-        )}
-
-        <div className="flex gap-2">
-          <Button variant="primary" onClick={onUpload} loading={progress !== null}>
-            Save screenshot
-          </Button>
-          <Button
-            variant="ghost"
-            disabled={progress !== null}
-            onClick={() => {
-              URL.revokeObjectURL(prepared.previewUrl);
-              setPrepared(null);
-            }}
-          >
-            Cancel
-          </Button>
-        </div>
-      </div>
     );
   }
 
@@ -221,15 +190,30 @@ export function TicketScreenshot({
       </div>
       <p className="text-sm font-medium text-ink">Add the ticket screenshot</p>
       <p className="mx-auto mt-1 max-w-xs text-xs text-ink-muted">
-        Drop an image here, or choose one. It's resized before upload so a phone screenshot
-        stays small.
+        Drop an image here, or choose one. It's resized in your browser first, so a phone
+        screenshot stays small.
       </p>
-      <Button className="mt-3" size="sm" variant="secondary" onClick={() => inputRef.current?.click()}>
+      <Button
+        className="mt-3"
+        size="sm"
+        variant="secondary"
+        loading={working}
+        onClick={() => inputRef.current?.click()}
+      >
         Choose image
       </Button>
       <HiddenInput ref={inputRef} onFiles={onFiles} />
     </div>
   );
+}
+
+function messageFor(error: unknown): string {
+  const code = (error as { code?: string })?.code;
+  if (code === "permission-denied") return "Only a league admin can change the ticket screenshot.";
+  if (code === "invalid-argument") {
+    return "That image is too large to store. Try cropping it to just the ticket.";
+  }
+  return (error as { message?: string })?.message ?? "Please try again.";
 }
 
 function HiddenInput({
@@ -272,17 +256,9 @@ function Lightbox({
       size="xl"
       title={`Week ${week.week} ticket`}
       description={image.uploadedByName ? `Uploaded by ${image.uploadedByName}` : undefined}
-      footer={
-        <Button
-          variant="secondary"
-          onClick={() => window.open(image.url, "_blank", "noopener,noreferrer")}
-        >
-          Open full size
-        </Button>
-      }
     >
       <img
-        src={image.url}
+        src={image.src}
         alt={`Parlay ticket for week ${week.week}`}
         className="mx-auto w-auto max-w-full object-contain"
       />

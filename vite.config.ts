@@ -50,7 +50,7 @@ export default defineConfig(({ mode, command }) => {
           // Firebase is the bulk of the bundle; split it so app code
           // invalidates independently of the SDK on redeploys.
           manualChunks: {
-            firebase: ["firebase/app", "firebase/auth", "firebase/firestore", "firebase/storage"],
+            firebase: ["firebase/app", "firebase/auth", "firebase/firestore"],
             react: ["react", "react-dom", "react-router-dom"],
           },
         },

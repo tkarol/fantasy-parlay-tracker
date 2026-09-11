@@ -99,21 +99,43 @@ export const memberConverter: FirestoreDataConverter<Member, DocumentData> = {
   },
 };
 
-function ticketImage(value: unknown): TicketImage | null {
+/**
+ * Reads both shapes: the current `src` data URL and the `url` left behind by
+ * the Cloud Storage version, so screenshots uploaded before the move still
+ * display.
+ */
+export function readTicketImage(value: unknown): TicketImage | null {
   if (!value || typeof value !== "object") return null;
   const d = value as Record<string, unknown>;
-  const url = str(d.url);
-  if (!url) return null;
+  const src = str(d.src) || str(d.url);
+  if (!src) return null;
   return {
-    path: str(d.path),
-    url,
+    src,
     width: typeof d.width === "number" ? d.width : null,
     height: typeof d.height === "number" ? d.height : null,
+    bytes: num(d.bytes, src.length),
     uploadedAt: toDate(d.uploadedAt as never),
     uploadedByUid: str(d.uploadedByUid),
     uploadedByName: str(d.uploadedByName),
   };
 }
+
+export const ticketImageConverter: FirestoreDataConverter<TicketImage, DocumentData> = {
+  toFirestore: (image) => ({ ...image }),
+  fromFirestore(snap: QueryDocumentSnapshot, options?: SnapshotOptions): TicketImage {
+    return (
+      readTicketImage(snap.data(options)) ?? {
+        src: "",
+        width: null,
+        height: null,
+        bytes: 0,
+        uploadedAt: null,
+        uploadedByUid: "",
+        uploadedByName: "",
+      }
+    );
+  },
+};
 
 export const weekConverter: FirestoreDataConverter<Week, DocumentData> = {
   toFirestore: withoutId,
@@ -131,7 +153,7 @@ export const weekConverter: FirestoreDataConverter<Week, DocumentData> = {
       closedAt: toDate(d.closedAt),
       createdAt: toDate(d.createdAt),
       note: str(d.note),
-      ticketImage: ticketImage(d.ticketImage),
+      ticketImage: readTicketImage(d.ticketImage),
       payoutOverride: typeof d.payoutOverride === "number" ? d.payoutOverride : null,
     };
   },

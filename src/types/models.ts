@@ -38,12 +38,22 @@ export interface Member {
   joinedAt: Date | null;
 }
 
+/**
+ * A screenshot of the real sportsbook ticket.
+ *
+ * Held in its own Firestore document rather than Cloud Storage: Storage now
+ * requires a billing plan, and — more usefully — Storage rules cannot read
+ * Firestore, so they could never check league membership. Here they can.
+ *
+ * `src` is either a `data:` URL (current) or an https URL left over from the
+ * Cloud Storage era.
+ */
 export interface TicketImage {
-  /** Storage path, kept so the file can be deleted or replaced later. */
-  path: string;
-  url: string;
+  src: string;
   width: number | null;
   height: number | null;
+  /** Encoded size, for display and for keeping under the document limit. */
+  bytes: number;
   uploadedAt: Date | null;
   uploadedByUid: string;
   uploadedByName: string;

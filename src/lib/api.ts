@@ -12,9 +12,8 @@ import {
   where,
   writeBatch,
 } from "firebase/firestore";
-import { deleteObject, getDownloadURL, ref, uploadBytesResumable } from "firebase/storage";
 import type { User } from "firebase/auth";
-import { db, storage } from "../firebase";
+import { db } from "../firebase";
 import {
   appLeagueDoc,
   inviteCodeDoc,
@@ -25,13 +24,13 @@ import {
   legDoc,
   legsCol,
   memberDoc,
-  ticketImagePath,
+  ticketImageDoc,
   weekDoc,
 } from "./firestorePaths";
 import { leagueConverter } from "./converters";
 import { makeInviteCode, makeLeagueId, weekId as makeWeekId } from "./rand";
 import { nextThursdaySixPm } from "./dates";
-import type { LegResult, MemberRole, TicketImage, Week } from "../types/models";
+import type { LegResult, MemberRole, Week } from "../types/models";
 
 /**
  * Every Firestore write in the app lives here.
@@ -509,84 +508,46 @@ export async function adminAddLegForMember(
 // Ticket screenshots
 // ---------------------------------------------------------------------------
 
-export interface TicketUpload {
-  blob: Blob;
-  fileName: string;
-  width: number | null;
-  height: number | null;
+export interface TicketImageInput {
+  dataUrl: string;
+  width: number;
+  height: number;
+  encodedBytes: number;
 }
 
 /**
- * Upload a ticket screenshot and point the week at it.
+ * Save the week's ticket screenshot.
  *
- * Storage rules cannot check league membership, so the upload lands in a
- * uid-scoped folder and only this Firestore write — which *is* admin-gated —
- * makes it the week's official ticket.
+ * The image lives in Firestore, in its own document under the week, where the
+ * rules can check that the writer is an admin of this league. Cloud Storage
+ * rules cannot read Firestore, so that check was impossible there.
  */
-export async function uploadTicketImage(
+export async function saveTicketImage(
   leagueId: string,
   weekIdValue: string,
   user: User,
-  upload: TicketUpload,
-  onProgress?: (fraction: number) => void,
-): Promise<TicketImage> {
-  const path = ticketImagePath(leagueId, weekIdValue, user.uid, upload.fileName);
-  const objectRef = ref(storage, path);
-
-  const task = uploadBytesResumable(objectRef, upload.blob, {
-    contentType: upload.blob.type || "image/jpeg",
-    cacheControl: "public, max-age=31536000, immutable",
-  });
-
-  await new Promise<void>((resolve, reject) => {
-    task.on(
-      "state_changed",
-      (snap) => onProgress?.(snap.totalBytes ? snap.bytesTransferred / snap.totalBytes : 0),
-      reject,
-      () => resolve(),
-    );
-  });
-
-  const url = await getDownloadURL(objectRef);
-  const image: TicketImage = {
-    path,
-    url,
-    width: upload.width,
-    height: upload.height,
-    uploadedAt: null,
+  image: TicketImageInput,
+): Promise<void> {
+  await setDoc(ticketImageDoc(leagueId, weekIdValue), {
+    src: image.dataUrl,
+    width: image.width,
+    height: image.height,
+    bytes: image.encodedBytes,
+    uploadedAt: serverTimestamp(),
     uploadedByUid: user.uid,
     uploadedByName: displayNameFor(user),
-  };
-
-  await updateDoc(weekDoc(leagueId, weekIdValue), {
-    ticketImage: {
-      path,
-      url,
-      width: upload.width,
-      height: upload.height,
-      uploadedAt: serverTimestamp(),
-      uploadedByUid: user.uid,
-      uploadedByName: displayNameFor(user),
-    },
   });
 
-  return image;
+  // Older weeks carry a pointer to a Cloud Storage object. Clear it so the two
+  // sources can never disagree about which screenshot is current.
+  await updateDoc(weekDoc(leagueId, weekIdValue), { ticketImage: deleteField() }).catch(() => {
+    // The field may simply not exist, which is the normal case.
+  });
 }
 
-export async function removeTicketImage(
-  leagueId: string,
-  weekIdValue: string,
-  image: TicketImage | null,
-): Promise<void> {
-  await updateDoc(weekDoc(leagueId, weekIdValue), { ticketImage: deleteField() });
-
-  if (image?.path) {
-    try {
-      await deleteObject(ref(storage, image.path));
-    } catch {
-      // The pointer is already gone, which is what the UI reflects. A stale
-      // object (uploaded by someone else, or already deleted) is not worth
-      // failing the operation over.
-    }
-  }
+export async function removeTicketImage(leagueId: string, weekIdValue: string): Promise<void> {
+  await deleteDoc(ticketImageDoc(leagueId, weekIdValue));
+  await updateDoc(weekDoc(leagueId, weekIdValue), { ticketImage: deleteField() }).catch(() => {
+    // Same as above: absent is fine.
+  });
 }
