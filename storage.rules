@@ -1,0 +1,49 @@
+rules_version = '2';
+
+// Ticket screenshots for weekly parlays.
+//
+// Storage rules cannot query Firestore, so league membership is NOT checkable
+// here. The model works around that instead of pretending otherwise:
+//
+//   * Uploads are namespaced by uploader uid, so a user can only ever write
+//     into their own folder and can never overwrite someone else's file.
+//   * An upload is inert until an admin points the week document at it, and
+//     that pointer lives in Firestore where the admin check IS enforced
+//     (see firestore.rules, match /leagues/{leagueId}/weeks/{weekId}).
+//   * Size and content-type caps bound what an upload can cost.
+//
+// Net effect: the worst a signed-in non-member can do is store an image in a
+// folder nobody reads. Displaying it requires an admin action.
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isImage() {
+      return request.resource.contentType.matches('image/(png|jpeg|jpg|webp|gif|heic|heif)');
+    }
+
+    function underSizeLimit() {
+      return request.resource.size < 8 * 1024 * 1024;
+    }
+
+    match /leagues/{leagueId}/weeks/{weekId}/tickets/{uploaderUid}/{fileName} {
+      allow read: if signedIn();
+
+      allow write: if signedIn()
+        && uploaderUid == request.auth.uid
+        && isImage()
+        && underSizeLimit();
+
+      allow delete: if signedIn() && uploaderUid == request.auth.uid;
+    }
+
+    // Nothing else is writable.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

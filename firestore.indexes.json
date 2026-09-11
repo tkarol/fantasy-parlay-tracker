@@ -1,0 +1,21 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "weeks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "season", "order": "ASCENDING" },
+        { "fieldPath": "week", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "weeks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "season", "order": "DESCENDING" },
+        { "fieldPath": "week", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

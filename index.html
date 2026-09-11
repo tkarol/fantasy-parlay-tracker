@@ -2,12 +2,38 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vite + React</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0f172a" />
+    <meta
+      name="description"
+      content="Run a weekly group parlay with your friends. One ticket, one leg each, live odds, and season-long bragging rights."
+    />
+    <meta property="og:title" content="Fantasy Parlay Tracker" />
+    <meta
+      property="og:description"
+      content="One ticket. One leg each. Season-long bragging rights."
+    />
+    <meta property="og:type" content="website" />
+    <title>Fantasy Parlay Tracker</title>
+    <script>
+      // Apply the stored theme before first paint so there is no light flash.
+      (function () {
+        try {
+          var stored = localStorage.getItem("parlay-theme");
+          var dark =
+            stored === "dark" ||
+            ((!stored || stored === "system") &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches);
+          if (dark) document.documentElement.classList.add("dark");
+        } catch (e) {
+          /* storage blocked — fall back to light */
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -1,0 +1,228 @@
+rules_version = '2';
+
+// Fantasy Parlay Tracker — access model
+//
+//   leagues/{leagueId}                        league metadata
+//     members/{uid}                           role: admin | member
+//     weeks/{weekId}                          one weekly ticket (id = "{season}-{week}")
+//       legs/{uid}                            one leg per member (doc id IS the member uid)
+//     joinRequests/{uid}                      pending access requests
+//   inviteCodes/{CODE}                        public code -> leagueId lookup
+//
+// Principles enforced below:
+//   * League contents are visible to members only. Non-members resolve an invite
+//     code through /inviteCodes, which exposes nothing but a league id and name.
+//   * Members write only their OWN leg, only on an open week, only before the
+//     deadline, and can never set their own result (no self-grading).
+//   * Admins grade legs, manage weeks, and approve join requests.
+//   * The league owner can never be demoted or removed by another admin.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- helpers ----------
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function uid() {
+      return request.auth.uid;
+    }
+
+    function leagueRef(leagueId) {
+      return /databases/$(database)/documents/leagues/$(leagueId);
+    }
+
+    function memberRef(leagueId, memberUid) {
+      return /databases/$(database)/documents/leagues/$(leagueId)/members/$(memberUid);
+    }
+
+    function isMember(leagueId) {
+      return signedIn() && exists(memberRef(leagueId, uid()));
+    }
+
+    function isAdmin(leagueId) {
+      return isMember(leagueId)
+        && get(memberRef(leagueId, uid())).data.role == 'admin';
+    }
+
+    function leagueData(leagueId) {
+      return get(leagueRef(leagueId)).data;
+    }
+
+    function isOwner(leagueId) {
+      return signedIn()
+        && exists(leagueRef(leagueId))
+        && leagueData(leagueId).ownerUid == uid();
+    }
+
+    // Admin-or-owner. The owner check is the bootstrap path: when a league is
+    // first created the members doc may not be readable yet.
+    function canAdmin(leagueId) {
+      return isAdmin(leagueId) || isOwner(leagueId);
+    }
+
+    function unchanged(field) {
+      return request.resource.data[field] == resource.data[field];
+    }
+
+    function isText(value, maxLen) {
+      return value is string && value.size() > 0 && value.size() <= maxLen;
+    }
+
+    // Odds are stored as a number, or "" while a leg is still missing its
+    // price. The key may be absent entirely on an older document.
+    function isOdds(data) {
+      return !('odds' in data)
+        || data.odds == null
+        || data.odds == ''
+        || (data.odds is number && data.odds >= -100000 && data.odds <= 100000 && data.odds != 0);
+    }
+
+    function isResult(data) {
+      return !('result' in data)
+        || data.result in ['Win', 'Loss', 'Push', 'Void', 'Pending'];
+    }
+
+    function ownerUidOf(leagueId) {
+      return exists(leagueRef(leagueId)) ? leagueData(leagueId).ownerUid : '';
+    }
+
+    // ---------- invite codes ----------
+    // Any signed-in user may resolve a code. The document intentionally holds
+    // only { code, leagueId, leagueName, active } — never member data.
+
+    match /inviteCodes/{code} {
+      allow get: if signedIn();
+      allow list: if false; // codes must be known, not enumerated
+      allow create, update, delete: if signedIn()
+        && request.resource.data.leagueId is string
+        && canAdmin(request.resource.data.leagueId);
+    }
+
+    // ---------- leagues ----------
+
+    match /leagues/{leagueId} {
+      // Members read the league. `list` is needed for the dashboard query
+      // (memberUids array-contains uid), which is self-scoped by the rule below.
+      allow get: if isMember(leagueId) || isOwner(leagueId);
+      // Constrained to the caller's own leagues: the dashboard queries
+      // `memberUids array-contains uid` / `ownerUid == uid`, and any broader
+      // query fails this rule per-document.
+      allow list: if signedIn()
+        && (uid() in resource.data.memberUids || resource.data.ownerUid == uid());
+
+      allow create: if signedIn()
+        && request.resource.data.ownerUid == uid()
+        && isText(request.resource.data.name, 80)
+        && request.resource.data.memberUids == [uid()];
+
+      // Admins edit league settings. Ownership is immutable from the client.
+      allow update: if canAdmin(leagueId)
+        && unchanged('ownerUid')
+        && isText(request.resource.data.name, 80);
+
+      // Only the owner can delete a league.
+      allow delete: if isOwner(leagueId);
+
+      // ---------- members ----------
+
+      match /members/{memberUid} {
+        allow read: if isMember(leagueId) || isOwner(leagueId);
+
+        // Admins add members (this is how join requests get approved).
+        allow create: if canAdmin(leagueId)
+          && request.resource.data.uid == memberUid
+          && request.resource.data.role in ['admin', 'member'];
+
+        // Role changes are admin-only, and the owner's admin role is locked.
+        allow update: if canAdmin(leagueId)
+          && request.resource.data.role in ['admin', 'member']
+          && (memberUid != ownerUidOf(leagueId)
+              || request.resource.data.role == 'admin');
+
+        // Admins remove members; anyone may remove themselves (leave the
+        // league). The owner can never be removed.
+        allow delete: if memberUid != ownerUidOf(leagueId)
+          && (canAdmin(leagueId) || memberUid == uid());
+      }
+
+      // ---------- join requests ----------
+
+      match /joinRequests/{requestUid} {
+        // A requester sees their own request; admins see the queue.
+        allow get: if signedIn() && (requestUid == uid() || canAdmin(leagueId));
+        allow list: if canAdmin(leagueId);
+
+        allow create: if signedIn()
+          && requestUid == uid()
+          && request.resource.data.requesterUid == uid()
+          && !isMember(leagueId);
+
+        allow update: if false; // resubmit instead of editing
+        allow delete: if signedIn() && (requestUid == uid() || canAdmin(leagueId));
+      }
+
+      // ---------- weeks ----------
+
+      match /weeks/{weekId} {
+        allow read: if isMember(leagueId) || isOwner(leagueId);
+
+        allow create, update: if canAdmin(leagueId)
+          && request.resource.data.season is number
+          && request.resource.data.week is number
+          && request.resource.data.stake is number
+          && request.resource.data.stake >= 0
+          && request.resource.data.stake <= 100000
+          && request.resource.data.closed is bool;
+
+        allow delete: if canAdmin(leagueId);
+
+        // ---------- legs ----------
+        // Doc id is the member's uid: one leg per member per week, enforced
+        // structurally rather than by a uniqueness check.
+
+        match /legs/{legUid} {
+          allow read: if isMember(leagueId) || isOwner(leagueId);
+
+          function weekOpen() {
+            let week = get(/databases/$(database)/documents/leagues/$(leagueId)/weeks/$(weekId)).data;
+            return week.closed == false
+              && (!('deadline' in week) || request.time < week.deadline);
+          }
+
+          function validLegShape() {
+            return isText(request.resource.data.leg, 500)
+              && isOdds(request.resource.data)
+              && isResult(request.resource.data)
+              && isText(request.resource.data.memberName, 120);
+          }
+
+          // A member submits their own leg on an open, pre-deadline week and
+          // may never grade it.
+          allow create: if isMember(leagueId)
+            && legUid == uid()
+            && request.resource.data.uid == uid()
+            && validLegShape()
+            && request.resource.data.result == 'Pending'
+            && weekOpen();
+
+          allow update: if isMember(leagueId)
+            && legUid == uid()
+            && validLegShape()
+            && unchanged('uid')
+            && unchanged('result')          // grading is admin-only
+            && weekOpen();
+
+          allow delete: if (isMember(leagueId) && legUid == uid() && weekOpen())
+            || canAdmin(leagueId);
+
+          // Admins may write any leg at any time — that is how grading and
+          // late corrections happen.
+          allow create, update: if canAdmin(leagueId) && validLegShape();
+        }
+      }
+    }
+  }
+}
