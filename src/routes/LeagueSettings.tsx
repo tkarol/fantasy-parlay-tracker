@@ -20,6 +20,7 @@ import { useJoinRequests, useMembers } from "../hooks/useMembers";
 import { useToast } from "../hooks/useToast";
 import {
   approveJoinRequest,
+  ensureInviteCodeDoc,
   rejectJoinRequest,
   removeMember,
   renameLeague,
@@ -53,6 +54,16 @@ export default function LeagueSettings() {
     if (leagueName !== undefined) setName(leagueName);
     if (leagueStake !== undefined) setStake(String(leagueStake));
   }, [leagueName, leagueStake]);
+
+  // Repair leagues created before invite codes were indexed separately. Without
+  // this document nobody can join with the existing code.
+  const inviteCode = league?.inviteCode;
+  useEffect(() => {
+    if (!isAdmin || !leagueId || !inviteCode || !leagueName) return;
+    void ensureInviteCodeDoc(leagueId, leagueName, inviteCode).catch(() => {
+      // Non-fatal: rotating the code achieves the same repair.
+    });
+  }, [isAdmin, leagueId, inviteCode, leagueName]);
 
   if (loading) {
     return (

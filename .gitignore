@@ -34,3 +34,6 @@ firebase-debug.log*
 
 # Test/coverage output
 coverage
+
+# TypeScript incremental build info
+*.tsbuildinfo

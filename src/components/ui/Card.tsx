@@ -37,7 +37,9 @@ export function CardHeader({
     >
       <div className="min-w-0">
         <h2 className="text-base font-semibold text-ink sm:text-lg">{title}</h2>
-        {description && <p className="mt-0.5 text-xs text-ink-muted sm:text-sm">{description}</p>}
+        {description && (
+          <div className="mt-0.5 text-xs text-ink-muted sm:text-sm">{description}</div>
+        )}
       </div>
       {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
     </div>

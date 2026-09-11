@@ -36,7 +36,9 @@ export function EmptyState({
         </div>
       )}
       <h3 className="text-sm font-semibold text-ink">{title}</h3>
-      {description && <p className="mx-auto mt-1 max-w-sm text-sm text-ink-muted">{description}</p>}
+      {description && (
+        <div className="mx-auto mt-1 max-w-sm text-sm text-ink-muted">{description}</div>
+      )}
       {action && <div className="mt-4 flex justify-center gap-2">{action}</div>}
     </div>
   );
@@ -54,7 +56,7 @@ export function ErrorState({
   return (
     <div className="rounded-2xl border border-rose-500/30 bg-rose-500/5 px-5 py-6 text-center">
       <h3 className="text-sm font-semibold text-rose-700 dark:text-rose-400">{title}</h3>
-      {message && <p className="mx-auto mt-1 max-w-md text-sm text-ink-muted">{message}</p>}
+      {message && <div className="mx-auto mt-1 max-w-md text-sm text-ink-muted">{message}</div>}
       {action && <div className="mt-4 flex justify-center">{action}</div>}
     </div>
   );

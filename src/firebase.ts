@@ -1,7 +1,13 @@
 import { initializeApp, type FirebaseOptions } from "firebase/app";
-import { getAuth, GoogleAuthProvider, setPersistence, browserLocalPersistence } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
-import { getStorage } from "firebase/storage";
+import {
+  browserLocalPersistence,
+  connectAuthEmulator,
+  getAuth,
+  GoogleAuthProvider,
+  setPersistence,
+} from "firebase/auth";
+import { connectFirestoreEmulator, getFirestore } from "firebase/firestore";
+import { connectStorageEmulator, getStorage } from "firebase/storage";
 
 /**
  * Config comes from `.env` (see `.env.example`). These values are public
@@ -33,6 +39,16 @@ export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
+
+/**
+ * Point at the local emulator suite when VITE_USE_EMULATORS=true, so rules and
+ * data can be exercised without touching the real project. See README.
+ */
+if (import.meta.env.VITE_USE_EMULATORS === "true") {
+  connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
+  connectFirestoreEmulator(db, "127.0.0.1", 8080);
+  connectStorageEmulator(storage, "127.0.0.1", 9199);
+}
 
 export const googleProvider = new GoogleAuthProvider();
 // Always show the account chooser; avoids silently reusing the wrong Google account.

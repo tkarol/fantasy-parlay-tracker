@@ -13,7 +13,12 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "deploy": "npm run build && firebase deploy",
-    "deploy:rules": "firebase deploy --only firestore:rules,firestore:indexes,storage"
+    "deploy:rules": "firebase deploy --only firestore:rules,firestore:indexes,storage",
+    "emulators": "firebase emulators:start --only auth,firestore,storage",
+    "seed": "node scripts/seed-emulator.mjs",
+    "dev:emulated": "VITE_USE_EMULATORS=true vite",
+    "test:rules": "vitest run --config vitest.rules.config.ts",
+    "test:all": "npm run test && npm run test:rules"
   },
   "dependencies": {
     "firebase": "^12.2.1",
@@ -23,6 +28,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.33.0",
+    "@firebase/rules-unit-testing": "^5.0.2",
     "@types/node": "^22.20.2",
     "@types/react": "^19.1.10",
     "@types/react-dom": "^19.1.7",

@@ -177,6 +177,29 @@ export async function lookupInviteCode(rawCode: string): Promise<JoinLookup> {
   return { status: "not-found" };
 }
 
+/**
+ * Backfill the /inviteCodes entry for a league created before that collection
+ * existed.
+ *
+ * Non-members cannot query /leagues by invite code under the current rules, so
+ * a league without this document is unjoinable. Rather than requiring a
+ * migration script and a service account, an admin opening league settings
+ * repairs it: the write is idempotent and admin-gated by the same rules.
+ */
+export async function ensureInviteCodeDoc(
+  leagueId: string,
+  leagueName: string,
+  code: string,
+): Promise<boolean> {
+  if (!code) return false;
+
+  const existing = await getDoc(inviteCodeDoc(code));
+  if (existing.exists()) return false;
+
+  await setDoc(inviteCodeDoc(code), { code, leagueId, leagueName, active: true });
+  return true;
+}
+
 export async function requestToJoin(
   leagueId: string,
   code: string,

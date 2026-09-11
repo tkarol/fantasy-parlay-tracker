@@ -10,7 +10,7 @@ export interface ProfitPoint {
 }
 
 const HEIGHT = 200;
-const PAD = { top: 16, right: 16, bottom: 26, left: 48 };
+const PAD = { top: 18, right: 58, bottom: 26, left: 52 };
 
 /**
  * Cumulative group profit across the season.
@@ -50,7 +50,7 @@ export function ProfitChart({ points }: { points: ProfitPoint[] }) {
     // break-even" rather than distance from the bottom of the frame.
     const area = `${x(0)},${zeroY} ${line} ${x(points.length - 1)},${zeroY}`;
 
-    return { x, y, zeroY, line, area, plotWidth, plotHeight, min, max };
+    return { x, y, zeroY, line, area, plotWidth, plotHeight, min, max, minValue: rawMin, maxValue: rawMax };
   }, [points, width]);
 
   if (points.length === 0) {
@@ -150,6 +150,21 @@ export function ProfitChart({ points }: { points: ProfitPoint[] }) {
               clipPath={undefined}
             />
 
+            {/* Peak and trough are labelled so the axis needs no tick ladder. */}
+            {[geometry.maxValue, geometry.minValue]
+              .filter((value, index, all) => value !== 0 && all.indexOf(value) === index)
+              .map((value) => (
+                <text
+                  key={value}
+                  x={PAD.left - 8}
+                  y={geometry.y(value) + 3}
+                  textAnchor="end"
+                  className="fill-ink-faint text-[10px]"
+                >
+                  {formatUsdSigned(value)}
+                </text>
+              ))}
+
             {/* Final value carries a direct label; the rest use the tooltip. */}
             <circle
               cx={geometry.x(points.length - 1)}
@@ -159,6 +174,13 @@ export function ProfitChart({ points }: { points: ProfitPoint[] }) {
               stroke="rgb(var(--surface))"
               strokeWidth="2"
             />
+            <text
+              x={geometry.x(points.length - 1) + 9}
+              y={geometry.y(last.cumulative) + 4}
+              className="fill-ink text-[11px] font-semibold"
+            >
+              {formatUsdSigned(last.cumulative)}
+            </text>
 
             {hoverIndex !== null && active && (
               <g>

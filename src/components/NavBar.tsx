@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { Button, ThemeToggle } from "./ui";
 import { useAuth } from "../hooks/useAuth";
+import { DevSignIn, EMULATORS_ENABLED } from "./DevSignIn";
 import { cn } from "../lib/cn";
 
 const LINKS = [
@@ -110,6 +111,8 @@ export function NavBar() {
                 </>
               )}
             </div>
+          ) : EMULATORS_ENABLED ? (
+            <DevSignIn />
           ) : (
             <Button variant="primary" size="sm" onClick={() => void signIn()}>
               Sign in
