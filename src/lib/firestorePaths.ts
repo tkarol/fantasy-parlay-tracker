@@ -1,0 +1,37 @@
+import { collection, doc } from "firebase/firestore";
+import { db } from "../firebase";
+
+export const leaguesCol = () => collection(db, "leagues");
+export const leagueDoc = (leagueId: string) => doc(db, "leagues", leagueId);
+
+export const membersCol = (leagueId: string) => collection(db, "leagues", leagueId, "members");
+export const memberDoc = (leagueId: string, uid: string) =>
+  doc(db, "leagues", leagueId, "members", uid);
+
+export const weeksCol = (leagueId: string) => collection(db, "leagues", leagueId, "weeks");
+export const weekDoc = (leagueId: string, weekId: string) =>
+  doc(db, "leagues", leagueId, "weeks", weekId);
+
+export const legsCol = (leagueId: string, weekId: string) =>
+  collection(db, "leagues", leagueId, "weeks", weekId, "legs");
+export const legDoc = (leagueId: string, weekId: string, uid: string) =>
+  doc(db, "leagues", leagueId, "weeks", weekId, "legs", uid);
+
+export const joinRequestsCol = (leagueId: string) =>
+  collection(db, "leagues", leagueId, "joinRequests");
+export const joinRequestDoc = (leagueId: string, uid: string) =>
+  doc(db, "leagues", leagueId, "joinRequests", uid);
+
+/** Public code -> league lookup, so non-members never read league documents. */
+export const inviteCodesCol = () => collection(db, "inviteCodes");
+export const inviteCodeDoc = (code: string) => doc(db, "inviteCodes", code.toUpperCase());
+
+/** Storage path for a ticket screenshot, namespaced by uploader. */
+export function ticketImagePath(
+  leagueId: string,
+  weekId: string,
+  uploaderUid: string,
+  fileName: string,
+): string {
+  return `leagues/${leagueId}/weeks/${weekId}/tickets/${uploaderUid}/${fileName}`;
+}

@@ -69,6 +69,25 @@
     --tw-ring-color: rgb(var(--ink) / 0.45);
   }
 
+
+  /*
+   * Chart roles. Blue/red diverging pair rather than the conventional
+   * green/red: green vs red measures CVD deltaE 4.1 for deuteranopes, which is
+   * the single most common form of colour blindness. Position (above or below
+   * the zero line) carries the meaning; colour reinforces it.
+   */
+  .viz {
+    --viz-positive: #2a78d6;
+    --viz-negative: #d03b3b;
+    --viz-grid: rgb(var(--line));
+    --viz-axis: rgb(var(--ink-faint));
+  }
+
+  .dark .viz {
+    --viz-positive: #3987e5;
+    --viz-negative: #e66767;
+  }
+
   /* Tabular numerals keep odds/money columns from jittering as they update. */
   .tnum {
     font-variant-numeric: tabular-nums;
