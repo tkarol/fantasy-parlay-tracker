@@ -41,8 +41,28 @@ import type { League, LegResult, Member, MemberRole, ReactionEmoji, Week } from 
  * to be made rather than a dozen inline `setDoc` calls across components.
  */
 
-/** The league's lock rule, in the shape the date helpers want. */
-export function deadlineRuleOf(league: Pick<League, "deadlineWeekday" | "deadlineHour" | "deadlineMinute" | "deadlineTimeZone"> | null | undefined): DeadlineRule {
+type DeadlineFields = Pick<
+  League,
+  "autoDeadline" | "deadlineWeekday" | "deadlineHour" | "deadlineMinute" | "deadlineTimeZone"
+>;
+
+/**
+ * The league's lock rule, in the shape the date helpers want — or `null` when
+ * the league locks by hand, which is what every "should this week get a
+ * deadline?" decision below turns on.
+ */
+export function deadlineRuleOf(league: DeadlineFields | null | undefined): DeadlineRule | null {
+  if (!league || !league.autoDeadline) return null;
+  return {
+    weekday: league.deadlineWeekday,
+    hour: league.deadlineHour,
+    minute: league.deadlineMinute,
+    timeZone: league.deadlineTimeZone,
+  };
+}
+
+/** The rule's shape regardless of whether it is switched on — for display. */
+export function deadlineRuleShapeOf(league: DeadlineFields | null | undefined): DeadlineRule {
   if (!league) return DEFAULT_DEADLINE_RULE;
   return {
     weekday: league.deadlineWeekday,
@@ -82,6 +102,7 @@ export async function createLeague(user: User, options: CreateLeagueOptions): Pr
     inviteCode: code,
     memberUids: [user.uid],
     defaultStake: stake,
+    autoDeadline: false,
     deadlineWeekday: DEFAULT_DEADLINE_RULE.weekday,
     deadlineHour: DEFAULT_DEADLINE_RULE.hour,
     deadlineMinute: DEFAULT_DEADLINE_RULE.minute,
@@ -110,7 +131,6 @@ export async function createLeague(user: User, options: CreateLeagueOptions): Pr
     season,
     week: 1,
     stake,
-    deadline: nextDeadline(),
     closed: false,
     createdAt: serverTimestamp(),
   });
@@ -124,6 +144,11 @@ export async function renameLeague(leagueId: string, name: string): Promise<void
 
 export async function setDefaultStake(leagueId: string, stake: number): Promise<void> {
   await updateDoc(leagueDoc(leagueId), { defaultStake: stake, updatedAt: serverTimestamp() });
+}
+
+/** Switch the automatic weekly deadline on or off for future weeks. */
+export async function setAutoDeadline(leagueId: string, enabled: boolean): Promise<void> {
+  await updateDoc(leagueDoc(leagueId), { autoDeadline: enabled, updatedAt: serverTimestamp() });
 }
 
 export async function setDeadlineRule(leagueId: string, rule: DeadlineRule): Promise<void> {
@@ -327,9 +352,10 @@ export interface CreateWeekOptions {
   season: number;
   week: number;
   stake: number;
+  /** An explicit lock time. `null` means the week stays open until locked. */
   deadline?: Date | null;
-  /** Used when no explicit deadline is given. */
-  rule?: DeadlineRule;
+  /** Used when no explicit deadline is given. `null` — the default — is none. */
+  rule?: DeadlineRule | null;
 }
 
 export async function createWeek(
@@ -337,13 +363,16 @@ export async function createWeek(
   { season, week, stake, deadline, rule }: CreateWeekOptions,
 ): Promise<string> {
   const id = makeWeekId(season, week);
+  const lock = deadline !== undefined ? deadline : rule ? nextDeadline(rule) : null;
   await setDoc(
     weekDoc(leagueId, id),
     {
       season,
       week,
       stake,
-      deadline: deadline ?? nextDeadline(rule),
+      // Absent rather than null: the security rules read `'deadline' in week`,
+      // so a null would lock the week against its own members.
+      deadline: lock ?? deleteField(),
       closed: false,
       createdAt: serverTimestamp(),
     },
@@ -363,7 +392,7 @@ export async function startSeason(
   leagueId: string,
   season: number,
   stake: number,
-  rule?: DeadlineRule,
+  rule?: DeadlineRule | null,
 ): Promise<string> {
   return createWeek(leagueId, { season, week: 1, stake, rule });
 }
@@ -380,6 +409,9 @@ export async function updateWeek(
   const payload: Record<string, unknown> = { ...patch };
   // `null` means "clear this" — Firestore needs an explicit sentinel.
   if (patch.payoutOverride === null) payload.payoutOverride = deleteField();
+  // The deadline has to go away entirely rather than become null: the rules
+  // ask `'deadline' in week`, and a null field would compare as still set.
+  if (patch.deadline === null) payload.deadline = deleteField();
   if (patch.closed === true) payload.closedAt = serverTimestamp();
   if (patch.closed === false) payload.closedAt = deleteField();
   await updateDoc(weekDoc(leagueId, weekIdValue), payload);
@@ -400,7 +432,7 @@ export async function closeWeekAndOpenNext(
   leagueId: string,
   week: Week,
   existingWeekIds: readonly string[],
-  rule?: DeadlineRule,
+  rule?: DeadlineRule | null,
 ): Promise<string> {
   await updateWeek(leagueId, week.id, { closed: true });
 
@@ -419,6 +451,22 @@ export async function closeWeekAndOpenNext(
 
 export async function reopenWeek(leagueId: string, weekIdValue: string): Promise<void> {
   await updateWeek(leagueId, weekIdValue, { closed: false });
+}
+
+/**
+ * Stop taking picks right now.
+ *
+ * This is the same mechanism as a scheduled deadline — the lock time simply
+ * becomes this instant — so there is no second notion of "locked" for the
+ * rules, the countdown or the settlement to disagree about.
+ */
+export async function lockPicksNow(leagueId: string, weekIdValue: string): Promise<void> {
+  await updateWeek(leagueId, weekIdValue, { deadline: new Date() });
+}
+
+/** Reopen picks by removing the lock time altogether. */
+export async function clearDeadline(leagueId: string, weekIdValue: string): Promise<void> {
+  await updateWeek(leagueId, weekIdValue, { deadline: null });
 }
 
 // ---------------------------------------------------------------------------

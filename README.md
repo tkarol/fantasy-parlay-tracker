@@ -16,9 +16,10 @@ React 19 · TypeScript · Vite · Tailwind · Firebase (Auth, Firestore, Storage
 Each week the league puts one stake on one ticket. Every member contributes a
 single leg with its price. If all legs land, the group wins; one loss kills it.
 
-- **Members** add and edit their own leg, with odds, until the week's deadline.
-- **Admins** grade each leg, set the stake and deadline, upload a screenshot of
-  the real ticket, close the week, and approve join requests.
+- **Members** add and edit their own leg, with odds, until picks lock.
+- **Admins** lock the picks when the bet is placed, grade each leg, set the
+  stake, upload a screenshot of the real ticket, close the week, and approve
+  join requests.
 - **Everyone** sees the ticket update live, plus season stats: hit rates,
   streaks, real group P&L, and who alone broke an otherwise-winning ticket.
 
@@ -29,8 +30,8 @@ single leg with its price. If all legs land, the group wins; one loss kills it.
 there. Three places to go: **This week**, **Stats**, and **Admin** for admins.
 
 **Admin:** everything on one page — approve people, start a new season, manage
-weeks, set stakes and deadlines. Grading happens inline on the ticket itself,
-where the legs are.
+weeks, set stakes. Locking, grading and closing happen inline on the ticket
+itself, where the legs are.
 
 ### Seasons
 
@@ -46,15 +47,30 @@ rate against their own last season.
 
 ### When picks lock
 
-Each week has its own deadline, and new weeks get it from a league-wide rule —
-by default **Sundays at 12:00 PM Eastern**, just before the 1pm kickoffs.
-Change it under *Admin → League → Picks lock*.
+By default a week has **no deadline**: it stays open until an admin presses
+**Lock picks** on the week page — normally the moment the real bet is placed.
+That is one button, in the same place as everything else the week needs, and it
+is undone by **Reopen picks** just as easily.
 
-The rule is anchored to a named time zone rather than to whoever creates the
-week, which matters twice over: an admin on a trip does not move the league's
-deadline, and the season crosses the end of daylight saving — noon Eastern is
-16:00 UTC in September but 17:00 UTC in December, so the offset is resolved per
-date instead of assumed.
+A stored deadline is an absolute instant, not a rule that keeps being
+re-evaluated, so a week written with the wrong one is not corrected by changing
+the rule later. Manual locking sidesteps that entirely: there is nothing
+scheduled, so nothing can be scheduled wrong. *Admin → Weeks → Remove lock*
+clears a deadline a week is already carrying.
+
+Leagues that would rather it happen on a timer can switch *Admin → League →
+Picks lock* to **Automatically, every week** and pick the day and time —
+**Sundays at 12:00 PM Eastern** by default, just before the 1pm kickoffs. New
+weeks then open with that deadline already set, and *Admin → Weeks → Schedule …*
+applies it to a single week.
+
+Either way the lock is one mechanism: a `deadline` on the week document, which
+the security rules enforce. Locking by hand simply sets it to the current
+instant. The automatic rule is anchored to a named time zone rather than to
+whoever creates the week, which matters twice over: an admin on a trip does not
+move the league's deadline, and the season crosses the end of daylight saving —
+noon Eastern is 16:00 UTC in September but 17:00 UTC in December, so the offset
+is resolved per date instead of assumed.
 
 ### Settlement rules
 
@@ -208,10 +224,11 @@ created index takes a few minutes to build, and queries error until it is ready.
 ## Data model
 
 ```
-leagues/{leagueId}                   name, ownerUid, memberUids[], defaultStake
+leagues/{leagueId}                   name, ownerUid, memberUids[], defaultStake,
+                                     autoDeadline + the weekly lock rule
   members/{uid}                      role: admin | member, displayName, email
-  weeks/{season}-{week}              season, week, stake, deadline, closed,
-                                     payoutOverride
+  weeks/{season}-{week}              season, week, stake, closed, payoutOverride,
+                                     deadline (absent while picks are open)
     legs/{uid}                       leg, odds, result, memberName
     media/ticket                     screenshot of the real ticket
   joinRequests/{uid}                 pending access requests
@@ -237,8 +254,9 @@ Rules live in `firestore.rules` and are deployed with `npm run deploy:rules`.
 In summary:
 
 - League contents are visible to members only.
-- A member may write **only their own leg**, **only** on an open pre-deadline
-  week, and **can never set their own result** — no self-grading.
+- A member may write **only their own leg**, **only** on a week that is open
+  and unlocked, and **can never set their own result** — no self-grading. A
+  week with no `deadline` field is unlocked; locking sets it to that instant.
 - Admins grade legs, manage weeks, and approve members.
 - The league owner cannot be demoted or removed by another admin.
 - Listing leagues is constrained to the caller's own leagues.

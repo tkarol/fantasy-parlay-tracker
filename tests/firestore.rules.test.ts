@@ -5,7 +5,7 @@ import {
   initializeTestEnvironment,
   type RulesTestEnvironment,
 } from "@firebase/rules-unit-testing";
-import { doc, getDoc, setDoc, updateDoc, deleteDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, deleteField, serverTimestamp } from "firebase/firestore";
 import { afterAll, beforeAll, beforeEach, describe, it } from "vitest";
 
 /**
@@ -21,6 +21,10 @@ import { afterAll, beforeAll, beforeEach, describe, it } from "vitest";
 const LEAGUE = "test-league";
 const OPEN_WEEK = "2025-1";
 const CLOSED_WEEK = "2025-2";
+/** No `deadline` field at all — the default now that locking is manual. */
+const UNLOCKED_WEEK = "2025-3";
+/** Open, but locked by hand: the lock time has passed. */
+const LOCKED_WEEK = "2025-4";
 
 const ADMIN = "admin-uid";
 const MEMBER = "member-uid";
@@ -72,6 +76,20 @@ beforeEach(async () => {
       stake: 5,
       closed: true,
       deadline: new Date(Date.now() - 86_400_000),
+    });
+
+    await setDoc(doc(db, "leagues", LEAGUE, "weeks", UNLOCKED_WEEK), {
+      season: 2025,
+      week: 3,
+      stake: 5,
+      closed: false,
+    });
+    await setDoc(doc(db, "leagues", LEAGUE, "weeks", LOCKED_WEEK), {
+      season: 2025,
+      week: 4,
+      stake: 5,
+      closed: false,
+      deadline: new Date(Date.now() - 60_000),
     });
 
     await setDoc(doc(db, "leagues", LEAGUE, "weeks", OPEN_WEEK, "legs", MEMBER), {
@@ -139,6 +157,52 @@ describe("a member's own leg", () => {
         uid: MEMBER,
         memberName: "Member",
         leg: "Late entry",
+        odds: -110,
+        result: "Pending",
+      }),
+    );
+  });
+
+  it("can be created on a week with no deadline at all", async () => {
+    await assertSucceeds(
+      setDoc(doc(as(MEMBER), ...legPath(UNLOCKED_WEEK, MEMBER)), {
+        uid: MEMBER,
+        memberName: "Member",
+        leg: "Ravens ML",
+        odds: -150,
+        result: "Pending",
+      }),
+    );
+  });
+
+  // How a manual lock actually works: the admin moves the lock time to now.
+  it("cannot be created once the week has been locked by hand", async () => {
+    await assertFails(
+      setDoc(doc(as(MEMBER), ...legPath(LOCKED_WEEK, MEMBER)), {
+        uid: MEMBER,
+        memberName: "Member",
+        leg: "Too late",
+        odds: -110,
+        result: "Pending",
+      }),
+    );
+  });
+
+  it("can be created again once an admin removes the lock", async () => {
+    await assertSucceeds(
+      updateDoc(doc(as(ADMIN), "leagues", LEAGUE, "weeks", LOCKED_WEEK), {
+        season: 2025,
+        week: 4,
+        stake: 5,
+        closed: false,
+        deadline: deleteField(),
+      }),
+    );
+    await assertSucceeds(
+      setDoc(doc(as(MEMBER), ...legPath(LOCKED_WEEK, MEMBER)), {
+        uid: MEMBER,
+        memberName: "Member",
+        leg: "Back in",
         odds: -110,
         result: "Pending",
       }),

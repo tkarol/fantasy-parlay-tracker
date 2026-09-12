@@ -23,7 +23,8 @@ export function SeasonControls({
   weeks: Week[];
   seasons: number[];
   defaultStake: number;
-  deadlineRule: DeadlineRule;
+  /** The league's automatic lock rule, or null when it locks by hand. */
+  deadlineRule: DeadlineRule | null;
   onSeasonStarted: (weekId: string) => void;
 }) {
   const toast = useToast();
@@ -88,7 +89,9 @@ export function SeasonControls({
         open={open}
         onClose={() => setOpen(false)}
         title="Start a new season"
-        description={`Opens week 1, locking ${describeDeadlineRule(deadlineRule)}. Nothing about earlier seasons changes.`}
+        description={`Opens week 1${
+          deadlineRule ? `, locking ${describeDeadlineRule(deadlineRule)}` : " with picks open until you lock them"
+        }. Nothing about earlier seasons changes.`}
         footer={
           <>
             <Button variant="ghost" onClick={() => setOpen(false)}>

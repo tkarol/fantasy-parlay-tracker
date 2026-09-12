@@ -21,7 +21,14 @@ import { useLeagueContext } from "../hooks/useLeagueContext";
 import { useLegs } from "../hooks/useLegs";
 import { useToast } from "../hooks/useToast";
 import { WEEKDAY_NAMES, describeDeadlineRule } from "../lib/dates";
-import { deadlineRuleOf, renameLeague, setDeadlineRule, setDefaultStake } from "../lib/api";
+import {
+  deadlineRuleOf,
+  deadlineRuleShapeOf,
+  renameLeague,
+  setAutoDeadline,
+  setDeadlineRule,
+  setDefaultStake,
+} from "../lib/api";
 
 /** Everything an admin does, on one page, in the order they tend to need it. */
 export default function Admin() {
@@ -195,54 +202,81 @@ export default function Admin() {
 
           <Field
             label="Picks lock"
-            hint={`New weeks get this deadline. Currently ${describeDeadlineRule(deadlineRuleOf(league))}.`}
+            hint={
+              league.autoDeadline
+                ? `New weeks get a deadline: ${describeDeadlineRule(deadlineRuleShapeOf(league))}. Changing it here only affects weeks created from now on.`
+                : "New weeks stay open until you lock them from the week page. Nothing is scheduled, so nothing can be scheduled wrong."
+            }
           >
             {(id) => (
-              <div className="flex flex-wrap gap-2">
+              <div className="space-y-2">
                 <Select
                   id={id}
-                  value={weekday}
-                  onChange={(event) => setWeekday(event.target.value)}
-                  className="!w-auto"
-                >
-                  {WEEKDAY_NAMES.map((label, index) => (
-                    <option key={label} value={index}>
-                      {label}
-                    </option>
-                  ))}
-                </Select>
-                <Input
-                  type="time"
-                  value={lockTime}
-                  onChange={(event) => setLockTime(event.target.value)}
-                  aria-label="Lock time"
-                  className="!w-auto"
-                />
-                <Button
-                  loading={busy === "lock"}
-                  onClick={() => {
-                    const [hour, minute] = lockTime.split(":").map(Number);
-                    if (!Number.isInteger(hour) || !Number.isInteger(minute)) {
-                      toast.error("Check the time", "Pick a time of day.");
-                      return;
-                    }
+                  value={league.autoDeadline ? "auto" : "manual"}
+                  disabled={busy === "autoLock"}
+                  onChange={(event) =>
                     void run(
-                      "lock",
-                      () =>
-                        setDeadlineRule(leagueId, {
-                          weekday: Number(weekday),
-                          hour: hour!,
-                          minute: minute!,
-                          // Anchored to Eastern so the lock tracks kickoff, not
-                          // whoever happens to be creating the week.
-                          timeZone: league!.deadlineTimeZone,
-                        }),
-                      "Lock time saved",
-                    );
-                  }}
+                      "autoLock",
+                      () => setAutoDeadline(leagueId, event.target.value === "auto"),
+                      event.target.value === "auto"
+                        ? "New weeks will get a deadline"
+                        : "New weeks will stay open until you lock them",
+                    )
+                  }
+                  className="!w-auto"
                 >
-                  Save
-                </Button>
+                  <option value="manual">When I lock them</option>
+                  <option value="auto">Automatically, every week</option>
+                </Select>
+
+                {league.autoDeadline && (
+                  <div className="flex flex-wrap gap-2">
+                    <Select
+                      value={weekday}
+                      onChange={(event) => setWeekday(event.target.value)}
+                      aria-label="Lock day"
+                      className="!w-auto"
+                    >
+                      {WEEKDAY_NAMES.map((label, index) => (
+                        <option key={label} value={index}>
+                          {label}
+                        </option>
+                      ))}
+                    </Select>
+                    <Input
+                      type="time"
+                      value={lockTime}
+                      onChange={(event) => setLockTime(event.target.value)}
+                      aria-label="Lock time"
+                      className="!w-auto"
+                    />
+                    <Button
+                      loading={busy === "lock"}
+                      onClick={() => {
+                        const [hour, minute] = lockTime.split(":").map(Number);
+                        if (!Number.isInteger(hour) || !Number.isInteger(minute)) {
+                          toast.error("Check the time", "Pick a time of day.");
+                          return;
+                        }
+                        void run(
+                          "lock",
+                          () =>
+                            setDeadlineRule(leagueId, {
+                              weekday: Number(weekday),
+                              hour: hour!,
+                              minute: minute!,
+                              // Anchored to Eastern so the lock tracks kickoff, not
+                              // whoever happens to be creating the week.
+                              timeZone: league!.deadlineTimeZone,
+                            }),
+                          "Lock time saved",
+                        );
+                      }}
+                    >
+                      Save
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </Field>

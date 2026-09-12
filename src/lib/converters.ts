@@ -78,6 +78,7 @@ export const leagueConverter: FirestoreDataConverter<League, DocumentData> = {
       inviteCode: str(d.inviteCode),
       memberUids: strArray(d.memberUids),
       defaultStake: num(d.defaultStake, 5),
+      autoDeadline: bool(d.autoDeadline, false),
       // Leagues from before the deadline was configurable fall back to the
       // default rather than to whatever constant the code used at the time.
       deadlineWeekday: num(d.deadlineWeekday, DEFAULT_DEADLINE_RULE.weekday),

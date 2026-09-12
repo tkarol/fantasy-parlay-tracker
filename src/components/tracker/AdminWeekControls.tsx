@@ -3,14 +3,18 @@ import { Button, ConfirmDialog, Field, Input, Modal, Select } from "../ui";
 import { useToast } from "../../hooks/useToast";
 import {
   adminAddLegForMember,
+  clearDeadline,
   closeWeekAndOpenNext,
   createWeek,
   deleteWeek,
+  lockPicksNow,
   reopenWeek,
   updateWeek,
 } from "../../lib/api";
 import {
+  DEFAULT_DEADLINE_RULE,
   describeDeadlineRule,
+  formatDateTime,
   nextDeadline,
   toDateTimeLocalValue,
   type DeadlineRule,
@@ -34,10 +38,17 @@ export function AdminWeekControls({
   legs: Leg[];
   members: Member[];
   adminUid: string;
-  deadlineRule: DeadlineRule;
+  /** The league's automatic lock rule, or null when it locks by hand. */
+  deadlineRule: DeadlineRule | null;
   onWeekChange: (weekId: string) => void;
 }) {
   const toast = useToast();
+  // The rule's shape is still useful for the "use the usual lock" shortcut
+  // even when the league is not applying it automatically.
+  const ruleShape = deadlineRule ?? DEFAULT_DEADLINE_RULE;
+  // A week with nothing scheduled does not need a date picker in the way; the
+  // "Schedule …" button below puts one there in a click if it is ever wanted.
+  const showScheduleField = week.deadline !== null || deadlineRule !== null;
   const [stake, setStake] = useState(String(week.stake));
   const [deadline, setDeadline] = useState(toDateTimeLocalValue(week.deadline));
   const [payout, setPayout] = useState(week.payoutOverride === null ? "" : String(week.payoutOverride));
@@ -50,7 +61,7 @@ export function AdminWeekControls({
     const ms = Date.parse(deadline);
     if (!Number.isFinite(ms)) return null;
     return new Intl.DateTimeFormat(undefined, {
-      timeZone: deadlineRule.timeZone,
+      timeZone: ruleShape.timeZone,
       weekday: "short",
       month: "short",
       day: "numeric",
@@ -131,14 +142,15 @@ export function AdminWeekControls({
           )}
         </Field>
 
+        {showScheduleField && (
         <Field
-          label="Deadline"
+          label="Scheduled lock (optional)"
           hint={
             // The input reads in the browser's zone; show what that instant is
             // in the league's, so a travelling admin cannot set it an hour out.
             deadlinePreview
-              ? `Locks ${deadlinePreview}`
-              : "Submissions lock at this time."
+              ? `Picks lock ${deadlinePreview}`
+              : "Leave this empty and lock picks by hand when you place the bet."
           }
         >
           {(id) => (
@@ -161,7 +173,7 @@ export function AdminWeekControls({
                   void run(
                     "deadline",
                     () => updateWeek(leagueId, week.id, { deadline: new Date(ms) }),
-                    "Deadline updated",
+                    "Scheduled lock updated",
                   );
                 }}
               >
@@ -170,6 +182,45 @@ export function AdminWeekControls({
             </div>
           )}
         </Field>
+        )}
+      </div>
+
+      {/* Locking is just the lock time moving to this instant, so the same
+          control undoes a scheduled lock and one done by hand. */}
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-line bg-surface-2 px-3 py-2.5">
+        <span className="min-w-0 flex-1 text-sm text-ink">
+          {week.deadline
+            ? `Picks lock at ${formatDateTime(week.deadline)}.`
+            : "Picks are open until you lock them."}
+        </span>
+        {!week.closed && (
+          <Button
+            size="sm"
+            variant="secondary"
+            loading={busy === "lockNow"}
+            onClick={() =>
+              void run("lockNow", () => lockPicksNow(leagueId, week.id), "Picks locked")
+            }
+          >
+            Lock picks now
+          </Button>
+        )}
+        {week.deadline && (
+          <Button
+            size="sm"
+            variant="ghost"
+            loading={busy === "unlock"}
+            onClick={() =>
+              void run(
+                "unlock",
+                () => clearDeadline(leagueId, week.id),
+                "Lock removed — picks are open",
+              )
+            }
+          >
+            Remove lock
+          </Button>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -180,12 +231,12 @@ export function AdminWeekControls({
           onClick={() =>
             void run(
               "rule",
-              () => updateWeek(leagueId, week.id, { deadline: nextDeadline(deadlineRule) }),
-              `Deadline set to the league's usual lock`,
+              () => updateWeek(leagueId, week.id, { deadline: nextDeadline(ruleShape) }),
+              `Lock scheduled for ${describeDeadlineRule(ruleShape)}`,
             )
           }
         >
-          Use {describeDeadlineRule(deadlineRule)}
+          Schedule {describeDeadlineRule(ruleShape)}
         </Button>
         <Button size="sm" variant="ghost" onClick={() => setAddLegOpen(true)}>
           Add a leg for someone
@@ -452,7 +503,7 @@ function CreateWeekDialog({
   leagueId: string;
   weeks: Week[];
   defaultStake: number;
-  deadlineRule: DeadlineRule;
+  deadlineRule: DeadlineRule | null;
   onCreated: (weekId: string) => void;
 }) {
   const toast = useToast();

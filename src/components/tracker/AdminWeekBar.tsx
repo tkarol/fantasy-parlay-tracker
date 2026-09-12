@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Badge, Button, ConfirmDialog } from "../ui";
 import { useToast } from "../../hooks/useToast";
-import { closeWeekAndOpenNext, updateWeek } from "../../lib/api";
+import { clearDeadline, closeWeekAndOpenNext, lockPicksNow, updateWeek } from "../../lib/api";
 import type { DeadlineRule } from "../../lib/dates";
 import type { ParlaySettlement } from "../../lib/parlay";
 import type { Week } from "../../types/models";
@@ -13,7 +13,8 @@ import { cn } from "../../lib/cn";
  *
  * Grading lived here while closing lived on the admin page, so finishing a
  * week meant grading, navigating away, finding the right week in a dropdown,
- * closing it, and navigating back.
+ * closing it, and navigating back. The week now runs end to end from here:
+ * lock the picks, grade them, close and open the next one.
  */
 export function AdminWeekBar({
   leagueId,
@@ -29,7 +30,8 @@ export function AdminWeekBar({
   week: Week;
   weeks: Week[];
   settlement: ParlaySettlement;
-  deadlineRule: DeadlineRule;
+  /** The league's automatic lock rule, or null when it locks by hand. */
+  deadlineRule: DeadlineRule | null;
   /** Whether the week is still accepting legs. */
   open: boolean;
   onGrade: () => void;
@@ -41,11 +43,17 @@ export function AdminWeekBar({
 
   const pending = settlement.pendingLegs;
   const noLegs = settlement.status === "empty";
+  const needsGrading = pending > 0;
+  const submitted = settlement.countingLegs + settlement.voidedLegs;
 
-  // Before the deadline there is nothing for an admin to do but wait.
-  if (open && pending > 0) return null;
-  if (week.closed && pending === 0) return null;
-  if (noLegs && open) return null;
+  // Nothing to do on a week nobody has joined yet, or one already finished.
+  if (open && noLegs) return null;
+  if (week.closed && !needsGrading) return null;
+  // While picks are open the only move is to lock them — and when a deadline
+  // is already set, the countdown says when that happens on its own.
+  if (open && week.deadline) return null;
+
+  const mode = open ? "lock" : needsGrading ? "grade" : "close";
 
   async function run(label: string, action: () => Promise<unknown>, success: string) {
     setBusy(label);
@@ -81,40 +89,82 @@ export function AdminWeekBar({
     );
   }
 
-  const needsGrading = pending > 0;
+  const message =
+    mode === "lock"
+      ? `${submitted} pick${submitted === 1 ? "" : "s"} in. Lock them once you've placed the bet.`
+      : mode === "grade"
+        ? week.closed
+          ? pending === 1
+            ? "1 leg never got graded — this week won't count until it is."
+            : `${pending} legs never got graded — this week won't count until they are.`
+          : pending === 1
+            ? "1 leg still needs grading."
+            : `${pending} legs still need grading.`
+        : "Every leg is graded. Close the week to lock it in and open the next one.";
 
   return (
     <>
       <div
         className={cn(
           "flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border px-3 py-2.5",
-          needsGrading
-            ? "border-accent-line bg-accent-soft"
-            : "border-emerald-500/30 bg-emerald-500/10",
+          mode === "lock"
+            ? "border-line bg-surface-2"
+            : mode === "grade"
+              ? "border-accent-line bg-accent-soft"
+              : "border-emerald-500/30 bg-emerald-500/10",
         )}
       >
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-          <Badge tone={needsGrading ? "brand" : "good"}>
-            {week.closed ? "Closed" : needsGrading ? "Locked" : "Ready"}
-          </Badge>
-          <span className="text-sm text-ink">
-            {needsGrading
-              ? week.closed
-                ? pending === 1
-                  ? "1 leg never got graded — this week won't count until it is."
-                  : `${pending} legs never got graded — this week won't count until they are.`
-                : pending === 1
-                  ? "1 leg still needs grading."
-                  : `${pending} legs still need grading.`
-              : "Every leg is graded. Close the week to lock it in and open the next one."}
-          </span>
+          {/* The week header already says "Open", so the lock bar does not
+              repeat it — the other two states are news. */}
+          {mode !== "lock" && (
+            <Badge tone={mode === "grade" ? "brand" : "good"}>
+              {week.closed ? "Closed" : needsGrading ? "Locked" : "Ready"}
+            </Badge>
+          )}
+          <span className="text-sm text-ink">{message}</span>
         </div>
 
         <div className="flex shrink-0 flex-wrap gap-2">
-          {needsGrading ? (
-            <Button size="sm" variant="primary" onClick={onGrade}>
-              Grade {pending} leg{pending === 1 ? "" : "s"}
+          {mode === "lock" ? (
+            <Button
+              size="sm"
+              variant="primary"
+              loading={busy === "lock"}
+              onClick={() =>
+                void run(
+                  "lock",
+                  () => lockPicksNow(leagueId, week.id),
+                  "Picks are locked — nobody can add or edit a leg now",
+                )
+              }
+            >
+              Lock picks
             </Button>
+          ) : mode === "grade" ? (
+            <>
+              <Button size="sm" variant="primary" onClick={onGrade}>
+                Grade {pending} leg{pending === 1 ? "" : "s"}
+              </Button>
+              {/* Locking by hand has to be undoable by hand, or a misclick
+                  costs somebody their pick. */}
+              {!week.closed && week.deadline && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  loading={busy === "unlock"}
+                  onClick={() =>
+                    void run(
+                      "unlock",
+                      () => clearDeadline(leagueId, week.id),
+                      "Picks are open again",
+                    )
+                  }
+                >
+                  Reopen picks
+                </Button>
+              )}
+            </>
           ) : (
             <>
               <Button

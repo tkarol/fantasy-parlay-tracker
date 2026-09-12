@@ -121,7 +121,7 @@ export default function ThisWeek() {
     : week.closed
       ? "This week is closed."
       : !open
-        ? "The deadline has passed."
+        ? "Picks are locked for this week."
         : !isLatestWeek
           ? "You can only add a leg to the current week."
           : undefined;

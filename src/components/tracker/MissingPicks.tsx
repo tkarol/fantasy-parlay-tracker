@@ -94,7 +94,9 @@ export function MissingPicks({
             Copy nudge
           </Button>
         )}
-        {week.deadline && (
+        {/* Only worth offering while the lock is still ahead of us — a
+            reminder for a deadline that has already passed is noise. */}
+        {week.deadline && open && (
           <Button size="sm" variant="ghost" onClick={downloadReminder} title="Add the weekly deadline to your calendar">
             Remind me
           </Button>

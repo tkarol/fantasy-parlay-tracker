@@ -25,6 +25,15 @@ export interface League {
   memberUids: string[];
   /** Stake applied to newly created weeks. */
   defaultStake: number;
+  /**
+   * Whether a new week gets a deadline at all.
+   *
+   * Off by default, because a deadline stored on the week is an absolute
+   * instant: once written it is not corrected by changing the rule, so a
+   * mis-set one has to be hunted down per week. Most leagues run on the
+   * admin's own timing anyway — the bet gets placed, then picks lock.
+   */
+  autoDeadline: boolean;
   /** When picks lock each week. Applied to newly created weeks. */
   deadlineWeekday: number;
   deadlineHour: number;
