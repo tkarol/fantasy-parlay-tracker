@@ -18,6 +18,7 @@ import { MyLegForm } from "../components/tracker/MyLegForm";
 import { TicketScreenshot } from "../components/tracker/TicketScreenshot";
 import { MissingPicks } from "../components/tracker/MissingPicks";
 import { SweatStatus } from "../components/tracker/SweatStatus";
+import { WeekAwards } from "../components/tracker/WeekAwards";
 import { GradeWeekDialog } from "../components/tracker/GradeWeekDialog";
 import { useAuth } from "../hooks/useAuth";
 import { useLeagueContext } from "../hooks/useLeagueContext";
@@ -182,6 +183,10 @@ export default function ThisWeek() {
 
       {settlement && legs.length > 0 && (
         <SweatStatus legs={legs} settlement={settlement} stake={week.stake} />
+      )}
+
+      {settlement?.settled && (
+        <WeekAwards ticket={{ week, legs, settlement }} />
       )}
 
       {needsLeg && legForm}

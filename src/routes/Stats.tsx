@@ -6,6 +6,7 @@ import { WeekHistory } from "../components/stats/WeekHistory";
 import { BustBoard } from "../components/stats/BustBoard";
 import { SeasonCompare, MemberSeasonCompare } from "../components/stats/SeasonCompare";
 import { AllTime } from "../components/stats/AllTime";
+import { Standings, SurvivorBoard } from "../components/stats/Standings";
 import { useLeagueContext } from "../hooks/useLeagueContext";
 import { useLegsByWeek } from "../hooks/useLegs";
 import {
@@ -14,6 +15,7 @@ import {
   compareSeasons,
   formatStreak,
 } from "../lib/stats";
+import { buildBadges, buildStandings, survivorState } from "../lib/scoring";
 import { formatPercent, formatUsd, formatUsdSigned } from "../lib/odds";
 import { cn } from "../lib/cn";
 
@@ -71,6 +73,19 @@ export default function Stats() {
     () => (activeView.kind === "all" ? buildAllTimeRecord(tickets, members) : null),
     [tickets, activeView, members],
   );
+
+  // The season's own game: points, badges and Survivor, all derived from the
+  // legs already graded.
+  const seasonTickets = useMemo(
+    () =>
+      activeView.kind === "season"
+        ? tickets.filter((ticket) => ticket.week.season === activeView.season)
+        : tickets,
+    [tickets, activeView],
+  );
+  const standings = useMemo(() => buildStandings(seasonTickets, members), [seasonTickets, members]);
+  const badges = useMemo(() => buildBadges(seasonTickets, members), [seasonTickets, members]);
+  const survivor = useMemo(() => survivorState(seasonTickets, members), [seasonTickets, members]);
 
   if (weeksLoading) {
     return (
@@ -151,6 +166,16 @@ export default function Stats() {
         <AllTime record={allTime} />
       ) : comparison ? (
         <>
+          <Card>
+            <CardHeader
+              title="Standings"
+              description="Points are weighted by how hard the pick was — a +500 winner is worth four times a -400 one."
+            />
+            <CardBody>
+              <Standings rows={standings} badges={badges} />
+            </CardBody>
+          </Card>
+
           {comparison.previous && <SeasonCompare comparison={comparison} />}
 
           <Card>
@@ -208,19 +233,32 @@ export default function Stats() {
 
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>
+              <CardHeader title="Survivor" description="One losing leg and you're out." />
+              <CardBody>
+                <SurvivorBoard
+                  entrants={survivor.entrants}
+                  alive={survivor.alive}
+                  champion={survivor.champion}
+                  furthest={survivor.furthest}
+                />
+              </CardBody>
+            </Card>
+
+            <Card>
               <CardHeader title="Hall of shame" description="Tickets broken by exactly one leg." />
               <CardBody>
                 <BustBoard busts={comparison.current.busts} />
               </CardBody>
             </Card>
 
-            <Card>
-              <CardHeader title="Week by week" description="Every ticket this season." />
-              <CardBody>
-                <WeekHistory tickets={comparison.current.tickets} />
-              </CardBody>
-            </Card>
           </div>
+
+          <Card>
+            <CardHeader title="Week by week" description="Every ticket this season." />
+            <CardBody>
+              <WeekHistory tickets={comparison.current.tickets} />
+            </CardBody>
+          </Card>
         </>
       ) : null}
 
