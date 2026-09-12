@@ -3,30 +3,22 @@ import type { User } from "firebase/auth";
 import { Button, Field, Input } from "../ui";
 import { useToast } from "../../hooks/useToast";
 import { deleteLeg, submitMyLeg } from "../../lib/api";
-import {
-  americanToDecimal,
-  decimalToAmerican,
-  formatAmerican,
-  formatUsd,
-  parseAmerican,
-} from "../../lib/odds";
-import { combineDecimal } from "../../lib/parlay";
-import { parsePick } from "../../lib/slip";
-import { OddsInput } from "./OddsField";
+import { formatAmerican } from "../../lib/odds";
 import type { Leg, Week } from "../../types/models";
 
 /**
- * A member's own leg, including its price.
+ * A member's own leg: the pick, and nothing else.
  *
- * Members could previously only submit leg *text* — every odds value had to be
- * typed in later by an admin, which is why so many legs sat unpriced.
+ * Members used to type their own price too, which made them responsible for a
+ * number they had no way to get right — the book's final price is on the slip
+ * the admin places, not on the screen the member was looking at. So the pick
+ * is all that is asked for, and pricing happens once, from the real ticket.
  */
 export function MyLegForm({
   leagueId,
   week,
   user,
   myLeg,
-  otherLegs,
   disabled,
   disabledReason,
   emphasis = false,
@@ -35,44 +27,20 @@ export function MyLegForm({
   week: Week;
   user: User;
   myLeg: Leg | null;
-  otherLegs: Leg[];
   disabled: boolean;
   disabledReason?: string;
-  /** Bigger, accent-coloured submit for the "your turn" card. */
+  /** Bigger submit for the "your turn" card. */
   emphasis?: boolean;
 }) {
   const toast = useToast();
   const [text, setText] = useState(myLeg?.leg ?? "");
-  const [odds, setOdds] = useState(myLeg?.odds === null ? "" : String(myLeg?.odds ?? ""));
   const [saving, setSaving] = useState(false);
   const [removing, setRemoving] = useState(false);
-  const [oddsError, setOddsError] = useState<string | null>(null);
 
   // Re-sync when the week changes or another device edits the same leg.
   useEffect(() => {
     setText(myLeg?.leg ?? "");
-    setOdds(myLeg?.odds === null || myLeg?.odds === undefined ? "" : String(myLeg.odds));
-    setOddsError(null);
-  }, [myLeg?.id, myLeg?.leg, myLeg?.odds, week.id]);
-
-  const parsedOdds = parseAmerican(odds);
-  const oddsLooksWrong = odds.trim() !== "" && parsedOdds === null;
-
-  // Live preview of what this leg does to the ticket.
-  const projected = combineDecimal([...otherLegs.map((leg) => leg.odds), parsedOdds]);
-  const myDecimal = americanToDecimal(parsedOdds);
-
-  /** Split a price off the pick text into the odds box. */
-  function absorbPrice(raw: string, { onlyIfEmpty }: { onlyIfEmpty: boolean }) {
-    const parsed = parsePick(raw);
-    if (parsed.odds === null) return false;
-    if (onlyIfEmpty && odds.trim() !== "") return false;
-
-    setText(parsed.leg);
-    setOdds(String(parsed.odds));
-    setOddsError(null);
-    return true;
-  }
+  }, [myLeg?.id, myLeg?.leg, week.id]);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -82,14 +50,12 @@ export function MyLegForm({
       toast.error("Add your pick", "Describe the leg you want on the ticket.");
       return;
     }
-    if (oddsLooksWrong) {
-      setOddsError("Use American odds, like -110 or +150.");
-      return;
-    }
 
     setSaving(true);
     try {
-      await submitMyLeg(leagueId, week.id, week, user, { leg: text, odds: parsedOdds }, !myLeg);
+      // No `odds` key: the price is the admin's, and an edit here must not
+      // erase one they have already filled in.
+      await submitMyLeg(leagueId, week.id, week, user, { leg: text }, !myLeg);
       toast.success(myLeg ? "Leg updated" : "Leg added to the ticket");
     } catch (error) {
       toast.error("Couldn't save your leg", messageOf(error));
@@ -103,7 +69,6 @@ export function MyLegForm({
     try {
       await deleteLeg(leagueId, week.id, user.uid);
       setText("");
-      setOdds("");
       toast.success("Leg removed");
     } catch (error) {
       toast.error("Couldn't remove your leg", messageOf(error));
@@ -118,8 +83,10 @@ export function MyLegForm({
         <p className="text-sm text-ink-muted">{disabledReason ?? "Submissions are closed."}</p>
         {myLeg && (
           <p className="mt-2 text-sm text-ink">
-            Your leg: <span className="font-medium">{myLeg.leg}</span>{" "}
-            <span className="tnum text-ink-muted">{formatAmerican(myLeg.odds)}</span>
+            Your leg: <span className="font-medium">{myLeg.leg}</span>
+            {myLeg.odds !== null && (
+              <span className="tnum text-ink-muted"> {formatAmerican(myLeg.odds)}</span>
+            )}
           </p>
         )}
       </div>
@@ -128,64 +95,18 @@ export function MyLegForm({
 
   return (
     <form onSubmit={onSubmit} className="space-y-3">
-      <div className="grid items-start gap-3 sm:grid-cols-[1fr_13rem]">
-        <Field label="Your pick" hint="What are you putting on the ticket?">
-          {(id) => (
-            <Input
-              id={id}
-              value={text}
-              onChange={(event) => setText(event.target.value)}
-              onPaste={(event) => {
-                const pasted = event.clipboardData.getData("text");
-                // Paste straight from a sportsbook and the price lands in the
-                // right box instead of being retyped.
-                if (parsePick(pasted).odds !== null) {
-                  event.preventDefault();
-                  absorbPrice(pasted, { onlyIfEmpty: false });
-                }
-              }}
-              onBlur={(event) => absorbPrice(event.target.value, { onlyIfEmpty: true })}
-              placeholder="Bills -3.5 (-110)"
-              maxLength={500}
-              autoComplete="off"
-            />
-          )}
-        </Field>
-
-        <Field
-          label="Odds"
-          error={oddsError}
-          hint={emphasis || myDecimal ? undefined : "Or paste the whole line"}
-        >
-          {(id) => (
-            <OddsInput
-              id={id}
-              value={odds}
-              invalid={oddsLooksWrong}
-              onChange={(next) => {
-                setOdds(next);
-                setOddsError(null);
-              }}
-            />
-          )}
-        </Field>
-      </div>
-
-      {/*
-        A preview of what this leg does to the ticket. Only while it would
-        actually change something — repeating the ticket's own figure back at
-        someone who has already submitted is noise.
-      */}
-      {projected !== null && (myLeg === null || parsedOdds !== myLeg.odds) && (
-        <p className="rounded-lg bg-surface-3 px-3 py-2 text-xs text-ink-muted">
-          With your leg the ticket prices at{" "}
-          <span className="font-semibold tnum text-ink">
-            {formatAmerican(decimalToAmerican(projected))}
-          </span>{" "}
-          — {formatUsd(week.stake)} returns{" "}
-          <span className="font-semibold tnum text-ink">{formatUsd(week.stake * projected)}</span>
-        </p>
-      )}
+      <Field label="Your pick" hint="Whatever you'd tell the group — team, line, however you say it.">
+        {(id) => (
+          <Input
+            id={id}
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+            placeholder="Bills -3.5"
+            maxLength={500}
+            autoComplete="off"
+          />
+        )}
+      </Field>
 
       <div className="flex flex-wrap gap-2">
         <Button

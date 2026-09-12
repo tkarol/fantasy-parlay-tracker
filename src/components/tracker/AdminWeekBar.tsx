@@ -23,7 +23,9 @@ export function AdminWeekBar({
   settlement,
   deadlineRule,
   open,
+  unpriced,
   onGrade,
+  onFillOdds,
   onWeekChange,
 }: {
   leagueId: string;
@@ -34,7 +36,10 @@ export function AdminWeekBar({
   deadlineRule: DeadlineRule | null;
   /** Whether the week is still accepting legs. */
   open: boolean;
+  /** Legs still waiting on a price — the admin's job before grading. */
+  unpriced: number;
   onGrade: () => void;
+  onFillOdds: () => void;
   onWeekChange: (weekId: string) => void;
 }) {
   const toast = useToast();
@@ -89,18 +94,26 @@ export function AdminWeekBar({
     );
   }
 
+  // Prices come off the slip the moment it is placed, so an unpriced locked
+  // week is asking for that, not for grades the games have not produced yet.
+  const needsPrices = mode === "grade" && !week.closed && unpriced > 0;
+
   const message =
     mode === "lock"
       ? `${submitted} pick${submitted === 1 ? "" : "s"} in. Lock them once you've placed the bet.`
-      : mode === "grade"
-        ? week.closed
+      : needsPrices
+        ? unpriced === 1
+          ? "1 leg still needs a price. Paste your slip, or tap one on the leg itself."
+          : `${unpriced} legs still need a price. Paste your slip and they all fill in at once.`
+        : mode === "grade"
+          ? week.closed
           ? pending === 1
-            ? "1 leg never got graded — this week won't count until it is."
-            : `${pending} legs never got graded — this week won't count until they are.`
-          : pending === 1
-            ? "1 leg still needs grading."
-            : `${pending} legs still need grading.`
-        : "Every leg is graded. Close the week to lock it in and open the next one.";
+              ? "1 leg never got graded — this week won't count until it is."
+              : `${pending} legs never got graded — this week won't count until they are.`
+            : pending === 1
+              ? "1 leg still needs grading."
+              : `${pending} legs still need grading.`
+          : "Every leg is graded. Close the week to lock it in and open the next one.";
 
   return (
     <>
@@ -143,7 +156,12 @@ export function AdminWeekBar({
             </Button>
           ) : mode === "grade" ? (
             <>
-              <Button size="sm" variant="primary" onClick={onGrade}>
+              {needsPrices && (
+                <Button size="sm" variant="primary" onClick={onFillOdds}>
+                  Paste slip
+                </Button>
+              )}
+              <Button size="sm" variant={needsPrices ? "ghost" : "primary"} onClick={onGrade}>
                 Grade {pending} leg{pending === 1 ? "" : "s"}
               </Button>
               {/* Locking by hand has to be undoable by hand, or a misclick

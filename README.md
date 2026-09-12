@@ -16,10 +16,11 @@ React 19 · TypeScript · Vite · Tailwind · Firebase (Auth, Firestore, Storage
 Each week the league puts one stake on one ticket. Every member contributes a
 single leg with its price. If all legs land, the group wins; one loss kills it.
 
-- **Members** add and edit their own leg, with odds, until picks lock.
-- **Admins** lock the picks when the bet is placed, grade each leg, set the
-  stake, upload a screenshot of the real ticket, close the week, and approve
-  join requests.
+- **Members** add and edit their own leg — the pick, and nothing else — until
+  picks lock.
+- **Admins** lock the picks when the bet is placed, price the legs off the real
+  slip, grade each leg, set the stake, upload a screenshot of the ticket, close
+  the week, and approve join requests.
 - **Everyone** sees the ticket update live, plus season stats: hit rates,
   streaks, real group P&L, and who alone broke an otherwise-winning ticket.
 
@@ -27,7 +28,8 @@ single leg with its price. If all legs land, the group wins; one loss kills it.
 
 **Member:** sign in with Google → tap *Request access* once → an admin approves
 → every visit after that lands on this week's ticket with the leg form right
-there. Three places to go: **This week**, **Stats**, and **Admin** for admins.
+there: one box, their pick, done. Three places to go: **This week**, **Stats**,
+and **Admin** for admins.
 
 **Admin:** everything on one page — approve people, start a new season, manage
 weeks, set stakes. Locking, grading and closing happen inline on the ticket
@@ -71,6 +73,26 @@ whoever creates the week, which matters twice over: an admin on a trip does not
 move the league's deadline, and the season crosses the end of daylight saving —
 noon Eastern is 16:00 UTC in September but 17:00 UTC in December, so the offset
 is resolved per date instead of assumed.
+
+### Who enters the odds
+
+Members do not. They submit a pick and nothing else.
+
+The price that matters is the one the book actually gave, and that is on the
+slip the admin places — not on the screen a member was looking at when they
+sent their pick in. Asking eight people for a number none of them could get
+right produced legs that were wrong as often as missing, so the ask is gone.
+
+Pricing happens once, after the bet is placed:
+
+- **Paste slip** on the ticket takes the whole bet slip pasted as text and
+  matches each line to a leg, filling every price in one go.
+- A leg still without one shows a **Price** box on its own row, with the four
+  prices almost every leg lands on one tap away.
+
+Until then a leg is marked *No odds* and the ticket simply shows no price, and
+the admin week bar says how many are still waiting. A member editing the wording
+of their pick afterwards does not disturb a price already recorded.
 
 ### Settlement rules
 

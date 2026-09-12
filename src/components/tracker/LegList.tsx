@@ -5,7 +5,7 @@ import { ResultBadge } from "./ResultBadge";
 import { LegReactions } from "./LegReactions";
 import { resultAccent } from "./resultAccent";
 import { useToast } from "../../hooks/useToast";
-import { adminUpdateLeg, deleteLeg, gradeLeg } from "../../lib/api";
+import { adminUpdateLeg, deleteLeg, gradeLeg, setLegOdds } from "../../lib/api";
 import { americanToDecimal, formatAmerican, parseAmerican } from "../../lib/odds";
 import { parsePick } from "../../lib/slip";
 import { QuickPrices } from "./OddsField";
@@ -127,6 +127,13 @@ export function LegList({
                 </div>
               </div>
 
+              {/* Every leg now arrives unpriced, so the price goes in right
+                  here rather than through the full edit row. It disappears as
+                  soon as there is one. */}
+              {isAdmin && leg.odds === null && (
+                <PriceLeg leagueId={leagueId} weekId={week.id} legId={leg.id} />
+              )}
+
               {isAdmin && (
                 <div className="mt-2.5 flex flex-wrap items-center gap-1.5 border-t border-line pt-2.5">
                   {LEG_RESULTS.map((result) => (
@@ -176,6 +183,65 @@ export function LegList({
         onCancel={() => setPendingDelete(null)}
       />
     </>
+  );
+}
+
+/** One leg's price, entered where the leg is. */
+function PriceLeg({
+  leagueId,
+  weekId,
+  legId,
+}: {
+  leagueId: string;
+  weekId: string;
+  legId: string;
+}) {
+  const toast = useToast();
+  const [odds, setOdds] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function save(raw: string) {
+    const parsed = parseAmerican(raw);
+    if (parsed === null) {
+      if (raw.trim() !== "") toast.error("Check the price", "Use American odds, like -110 or +150.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await setLegOdds(leagueId, weekId, [{ legId, odds: parsed }]);
+    } catch (error) {
+      toast.error("Couldn't save that price", (error as Error)?.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-line pt-2.5">
+      <span className="text-xs font-medium text-ink-muted">Price</span>
+      <Input
+        value={odds}
+        disabled={saving}
+        onChange={(event) => setOdds(event.target.value)}
+        onBlur={(event) => void save(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            event.currentTarget.blur();
+          }
+        }}
+        placeholder="-110"
+        aria-label="Price this leg"
+        className="!w-28"
+      />
+      <QuickPrices
+        value={odds}
+        onPick={(next) => {
+          setOdds(next);
+          void save(next);
+        }}
+      />
+    </div>
   );
 }
 

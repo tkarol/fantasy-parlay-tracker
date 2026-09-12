@@ -18,7 +18,6 @@ export function YourLegCard({
   week,
   user,
   myLeg,
-  otherLegs,
   now,
   disabled,
   disabledReason,
@@ -28,7 +27,6 @@ export function YourLegCard({
   week: Week;
   user: User;
   myLeg: Leg | null;
-  otherLegs: Leg[];
   now: Date;
   disabled: boolean;
   disabledReason?: string;
@@ -70,7 +68,6 @@ export function YourLegCard({
             week={week}
             user={user}
             myLeg={myLeg}
-            otherLegs={otherLegs}
             disabled={disabled}
             disabledReason={disabledReason}
           />
@@ -101,7 +98,7 @@ export function YourLegCard({
           Add your leg to the ticket
         </h2>
         <p className="mt-0.5 text-sm text-ink-muted">
-          Paste your pick straight from your sportsbook — the price fills itself in.
+          One pick, in your own words. An admin prices it off the real ticket.
         </p>
       </div>
 
@@ -111,7 +108,6 @@ export function YourLegCard({
           week={week}
           user={user}
           myLeg={myLeg}
-          otherLegs={otherLegs}
           disabled={disabled}
           disabledReason={disabledReason}
           emphasis

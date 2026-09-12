@@ -475,7 +475,12 @@ export async function clearDeadline(leagueId: string, weekIdValue: string): Prom
 
 export interface LegSubmission {
   leg: string;
-  odds: number | null;
+  /**
+   * American odds, or `null` to clear the price. Leave it out entirely to
+   * keep whatever price the leg already carries — which is what a member
+   * editing their wording does, since the price is not theirs to set.
+   */
+  odds?: number | null;
 }
 
 /** A member creating or editing their own leg. Never touches `result`. */
@@ -491,12 +496,15 @@ export async function submitMyLeg(
     uid: user.uid,
     memberName: displayNameFor(user),
     leg: submission.leg.trim(),
-    odds: submission.odds ?? "",
     season: week.season,
     week: week.week,
     updatedAt: serverTimestamp(),
   };
+  // An omitted price leaves the stored one alone (the write merges), so a
+  // member rewording their pick cannot wipe out odds an admin has filled in.
+  if (submission.odds !== undefined) payload.odds = submission.odds ?? "";
   if (isNew) {
+    payload.odds ??= "";
     payload.result = "Pending";
     payload.createdAt = serverTimestamp();
     payload.createdBy = user.uid;

@@ -135,7 +135,6 @@ export default function ThisWeek() {
       week={week}
       user={user}
       myLeg={myLeg}
-      otherLegs={legs.filter((leg) => leg.uid !== user.uid)}
       now={now}
       disabled={blockedReason !== undefined}
       disabledReason={blockedReason}
@@ -179,9 +178,11 @@ export default function ThisWeek() {
               week={week}
               weeks={weeks}
               settlement={settlement}
+              unpriced={legs.filter((leg) => leg.odds === null).length}
               deadlineRule={deadlineRuleOf(league)}
               open={open}
               onGrade={() => setGradingOpen(true)}
+              onFillOdds={() => setFillOddsOpen(true)}
               onWeekChange={setSelectedId}
             />
           )}
