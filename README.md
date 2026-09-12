@@ -114,7 +114,54 @@ emulator) — use `ann@example.test` / `password` for an admin.
 and the Firestore rules and indexes. There is nothing to deploy for Cloud
 Storage — screenshots live in Firestore, so the project stays on the free plan.
 
-### First deploy
+### Continuous deployment (recommended)
+
+Pushing to `main` builds and deploys automatically via
+`.github/workflows/deploy.yml`. Pull requests run the same checks without
+deploying. Every run typechecks, lints, runs the unit tests, runs the security
+rules against a real Firestore emulator, and builds — so a change that weakens
+the rules fails in CI rather than in production.
+
+#### One-time setup
+
+**1. Create a deploy service account.** In the Google Cloud console for the
+project, go to *IAM & Admin → Service Accounts → Create service account*, name
+it something like `github-deploy`, and grant it:
+
+- **Firebase Hosting Admin** — to publish the site
+- **Firebase Rules Admin** — to publish `firestore.rules`
+- **Cloud Datastore Index Admin** — to publish `firestore.indexes.json`
+- **Service Usage Consumer** — the CLI needs it to address the project
+
+(*Firebase Admin* alone also works and is fewer clicks, but it is much broader
+than a deploy job needs.)
+
+Then *Keys → Add key → Create new key → JSON* and download it.
+
+**2. Add two repository secrets** under *Settings → Secrets and variables →
+Actions → New repository secret*:
+
+| Secret | Value |
+|---|---|
+| `FIREBASE_SERVICE_ACCOUNT` | the entire contents of that JSON key file |
+| `DOTENV` | the entire contents of your local `.env` |
+
+`DOTENV` holds the Firebase web config. Those values are public — they ship in
+the JavaScript bundle to every visitor, and access is enforced by
+`firestore.rules`, not by hiding them. They live in a secret only because the
+repository is the wrong place to keep build configuration, not because they are
+sensitive.
+
+**3. Push to `main`.** Watch it under the repository's *Actions* tab.
+
+Treat the service account JSON as a real credential: it can publish to the
+project. If it ever leaks, delete that key in the Cloud console and add a new
+one.
+
+### Deploying by hand
+
+Not normally needed once CI is set up, but useful for the very first deploy or
+if you want to push something without a commit.
 
 1. **Create `.env`** from `.env.example` with your Firebase web config
    (console → Project settings → Your apps). The build fails if it is missing

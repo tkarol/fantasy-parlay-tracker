@@ -1,0 +1,80 @@
+name: Verify and deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # Lets you re-run a deploy from the Actions tab without pushing.
+  workflow_dispatch:
+
+# A second push while one deploy is running should supersede it, not race it.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Verify and deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # The Firebase web config is public but deliberately not committed, so CI
+      # reconstructs it from a secret. See README > Continuous deployment.
+      - name: Write .env
+        env:
+          DOTENV: ${{ secrets.DOTENV }}
+        run: |
+          if [ -z "$DOTENV" ]; then
+            echo "::error::The DOTENV secret is not set. See README > Continuous deployment."
+            exit 1
+          fi
+          printf '%s\n' "$DOTENV" > .env
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
+
+      # Runs against a real Firestore emulator, so a change that weakens the
+      # security rules fails here rather than in production.
+      - name: Security rules tests
+        run: npx firebase emulators:exec --only firestore --project fantasy-parlay-tracker "npm run test:rules"
+
+      - name: Build
+        run: npm run build
+
+      - name: Authenticate to Firebase
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        env:
+          SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$SERVICE_ACCOUNT" ]; then
+            echo "::error::The FIREBASE_SERVICE_ACCOUNT secret is not set. See README > Continuous deployment."
+            exit 1
+          fi
+          printf '%s' "$SERVICE_ACCOUNT" > "$RUNNER_TEMP/service-account.json"
+
+      - name: Deploy
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/service-account.json
+        run: |
+          npx firebase deploy \
+            --only hosting,firestore \
+            --project fantasy-parlay-tracker \
+            --non-interactive \
+            --message "${GITHUB_SHA::7} ${GITHUB_EVENT_NAME}"
