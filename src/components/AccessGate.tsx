@@ -55,7 +55,7 @@ function Hero({
   return (
     <Centered>
       <div className="text-center">
-        <div className="mx-auto grid h-14 w-14 place-content-center rounded-2xl bg-brand text-lg font-bold text-brand-ink">
+        <div className="mx-auto grid h-14 w-14 place-content-center rounded-2xl bg-accent text-lg font-bold text-accent-ink">
           FP
         </div>
         <h1 className="mt-5 text-2xl font-extrabold tracking-tight text-ink sm:text-3xl">{title}</h1>

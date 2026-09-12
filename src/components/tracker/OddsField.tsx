@@ -24,9 +24,9 @@ export function QuickPrices({
             onClick={() => onPick(String(price))}
             aria-pressed={active}
             className={cn(
-              "rounded-lg px-2 py-0.5 text-xs tnum transition",
+              "rounded-lg px-2 py-0.5 text-xs tnum leading-5 transition",
               active
-                ? "bg-brand text-brand-ink"
+                ? "bg-accent text-accent-ink"
                 : "border border-line text-ink-muted hover:bg-surface-3 hover:text-ink",
             )}
           >

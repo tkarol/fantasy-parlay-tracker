@@ -14,7 +14,7 @@ import { WeekNav } from "../components/tracker/WeekNav";
 import { TicketSummary } from "../components/tracker/TicketSummary";
 import { DeadlineCountdown } from "../components/tracker/DeadlineCountdown";
 import { LegList } from "../components/tracker/LegList";
-import { MyLegForm } from "../components/tracker/MyLegForm";
+import { YourLegCard } from "../components/tracker/YourLegCard";
 import { TicketScreenshot } from "../components/tracker/TicketScreenshot";
 import { MissingPicks } from "../components/tracker/MissingPicks";
 import { SweatStatus } from "../components/tracker/SweatStatus";
@@ -100,7 +100,7 @@ export default function ThisWeek() {
               isAdmin ? (
                 <Link
                   to="/admin"
-                  className="rounded-xl bg-brand px-4 py-2 text-sm font-medium text-brand-ink"
+                  className="rounded-xl bg-accent px-4 py-2 text-sm font-medium text-accent-ink"
                 >
                   Go to admin
                 </Link>
@@ -129,33 +129,23 @@ export default function ThisWeek() {
   const needsLeg = isMember && !myLeg && blockedReason === undefined;
 
   const legForm = user && (
-    <Card className={needsLeg ? "border-ink/25 shadow-md" : undefined}>
-      <CardHeader
-        title={needsLeg ? "Add your leg" : "Your leg"}
-        description={
-          needsLeg
-            ? "You're not on this ticket yet."
-            : myLeg
-              ? "You're on this ticket."
-              : undefined
-        }
-      />
-      <CardBody>
-        <MyLegForm
-          leagueId={leagueId}
-          week={week}
-          user={user}
-          myLeg={myLeg}
-          otherLegs={legs.filter((leg) => leg.uid !== user.uid)}
-          disabled={blockedReason !== undefined}
-          disabledReason={blockedReason}
-        />
-      </CardBody>
-    </Card>
+    <YourLegCard
+      leagueId={leagueId}
+      week={week}
+      user={user}
+      myLeg={myLeg}
+      otherLegs={legs.filter((leg) => leg.uid !== user.uid)}
+      now={now}
+      disabled={blockedReason !== undefined}
+      disabledReason={blockedReason}
+      needsLeg={needsLeg}
+    />
   );
 
   return (
     <Shell>
+      {needsLeg && legForm}
+
       <Card>
         <CardHeader
           title={
@@ -190,8 +180,6 @@ export default function ThisWeek() {
       {settlement?.settled && (
         <WeekAwards ticket={{ week, legs, settlement }} />
       )}
-
-      {needsLeg && legForm}
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">

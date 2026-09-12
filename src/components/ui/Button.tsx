@@ -2,7 +2,7 @@ import { forwardRef, type ButtonHTMLAttributes } from "react";
 import { Link, type LinkProps } from "react-router-dom";
 import { cn } from "../../lib/cn";
 
-export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "success";
+export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "success" | "neutral";
 export type ButtonSize = "sm" | "md" | "lg";
 
 const BASE =
@@ -10,11 +10,13 @@ const BASE =
   "disabled:cursor-not-allowed disabled:opacity-50 active:scale-[0.98] select-none whitespace-nowrap";
 
 const VARIANTS: Record<ButtonVariant, string> = {
-  primary: "bg-brand text-brand-ink hover:opacity-90 shadow-sm",
+  primary: "bg-accent text-accent-ink hover:brightness-110 shadow-sm",
   secondary: "border border-line bg-surface text-ink hover:bg-surface-3",
   ghost: "text-ink-muted hover:bg-surface-3 hover:text-ink",
   danger: "bg-rose-600 text-white hover:bg-rose-500 shadow-sm",
   success: "bg-emerald-600 text-white hover:bg-emerald-500 shadow-sm",
+  /* The old ink-on-white primary, for actions that are not the main one. */
+  neutral: "bg-brand text-brand-ink hover:opacity-90 shadow-sm",
 };
 
 const SIZES: Record<ButtonSize, string> = {

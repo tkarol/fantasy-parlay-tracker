@@ -207,7 +207,7 @@ export function GradeWeekDialog({
                       className={cn(
                         "rounded-lg px-2 py-1 text-xs font-medium transition",
                         result === option
-                          ? "bg-brand text-brand-ink"
+                          ? "bg-accent text-accent-ink"
                           : "border border-line text-ink-muted hover:bg-surface-3 hover:text-ink",
                       )}
                     >

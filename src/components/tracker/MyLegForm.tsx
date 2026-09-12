@@ -29,6 +29,7 @@ export function MyLegForm({
   otherLegs,
   disabled,
   disabledReason,
+  emphasis = false,
 }: {
   leagueId: string;
   week: Week;
@@ -37,6 +38,8 @@ export function MyLegForm({
   otherLegs: Leg[];
   disabled: boolean;
   disabledReason?: string;
+  /** Bigger, accent-coloured submit for the "your turn" card. */
+  emphasis?: boolean;
 }) {
   const toast = useToast();
   const [text, setText] = useState(myLeg?.leg ?? "");
@@ -125,7 +128,7 @@ export function MyLegForm({
 
   return (
     <form onSubmit={onSubmit} className="space-y-3">
-      <div className="grid gap-3 sm:grid-cols-[1fr_9rem]">
+      <div className="grid items-start gap-3 sm:grid-cols-[1fr_13rem]">
         <Field label="Your pick" hint="What are you putting on the ticket?">
           {(id) => (
             <Input
@@ -149,7 +152,11 @@ export function MyLegForm({
           )}
         </Field>
 
-        <Field label="Odds" error={oddsError} hint={myDecimal ? undefined : "Or paste the whole line above"}>
+        <Field
+          label="Odds"
+          error={oddsError}
+          hint={emphasis || myDecimal ? undefined : "Or paste the whole line"}
+        >
           {(id) => (
             <OddsInput
               id={id}
@@ -176,7 +183,13 @@ export function MyLegForm({
       )}
 
       <div className="flex flex-wrap gap-2">
-        <Button type="submit" variant="primary" loading={saving}>
+        <Button
+          type="submit"
+          variant="primary"
+          size={emphasis ? "lg" : "md"}
+          loading={saving}
+          className={emphasis ? "flex-1 sm:flex-none" : undefined}
+        >
           {myLeg ? "Update my leg" : "Add my leg"}
         </Button>
         {myLeg && (

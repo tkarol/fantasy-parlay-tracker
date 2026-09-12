@@ -22,7 +22,7 @@ export function NavBar() {
         <Link to="/" className="flex min-w-0 shrink items-center gap-2">
           <span
             aria-hidden
-            className="grid h-7 w-7 shrink-0 place-content-center rounded-lg bg-brand text-xs font-bold text-brand-ink"
+            className="grid h-7 w-7 shrink-0 place-content-center rounded-lg bg-accent text-xs font-bold text-accent-ink"
           >
             FP
           </span>
@@ -42,7 +42,7 @@ export function NavBar() {
                   cn(
                     "shrink-0 rounded-lg px-2.5 py-1.5 text-sm transition sm:px-3",
                     isActive
-                      ? "bg-surface-3 font-medium text-ink"
+                      ? "bg-accent-soft font-semibold text-accent"
                       : "text-ink-muted hover:bg-surface-3 hover:text-ink",
                   )
                 }

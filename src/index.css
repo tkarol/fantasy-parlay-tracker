@@ -20,6 +20,17 @@
     --line: 226 232 240;
     --brand: 15 23 42;
     --brand-ink: 255 255 255;
+
+    /*
+     * Accent for the things a person is meant to act on. Indigo because the
+     * outcome colours are spoken for — green wins, red loses, amber pushes —
+     * and an accent that borrowed any of those would read as a result.
+     * 6.3:1 against this surface, and white on it is the same.
+     */
+    --accent: 79 70 229;
+    --accent-ink: 255 255 255;
+    --accent-soft: 238 242 255;
+    --accent-line: 165 180 252;
   }
 
   .dark {
@@ -34,6 +45,12 @@
     --line: 51 65 85;
     --brand: 226 232 240;
     --brand-ink: 15 23 42;
+
+    /* Stepped lighter for the dark surface: 6.0:1, with dark ink on top. */
+    --accent: 129 140 248;
+    --accent-ink: 15 23 42;
+    --accent-soft: 30 27 75;
+    --accent-line: 67 56 202;
   }
 
   html,
@@ -95,6 +112,24 @@
 }
 
 @layer components {
+  /* Draws the eye once, then settles — a permanent animation is a nuisance. */
+  .attention-ring {
+    animation: attention 2.4s ease-out 3;
+  }
+
+  @keyframes attention {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 rgb(var(--accent) / 0);
+    }
+    18% {
+      box-shadow: 0 0 0 6px rgb(var(--accent) / 0.18);
+    }
+    45% {
+      box-shadow: 0 0 0 0 rgb(var(--accent) / 0);
+    }
+  }
+
   .skeleton {
     @apply relative overflow-hidden bg-surface-3 rounded-md;
   }

@@ -9,7 +9,7 @@ const TONES: Record<BadgeTone, string> = {
   bad: "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-400",
   warn: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400",
   info: "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-400",
-  brand: "border-transparent bg-brand text-brand-ink",
+  brand: "border-transparent bg-accent text-accent-ink",
 };
 
 export function Badge({

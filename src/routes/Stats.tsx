@@ -130,7 +130,9 @@ export default function Stats() {
                 onClick={() => setView({ kind: "season", season })}
                 className={cn(
                   "rounded-lg px-3.5 py-1.5 text-sm tnum transition",
-                  active ? "bg-surface font-medium text-ink shadow-sm" : "text-ink-muted hover:text-ink",
+                  active
+                    ? "bg-accent text-accent-ink shadow-sm"
+                    : "text-ink-muted hover:text-ink",
                 )}
               >
                 {season}
@@ -146,7 +148,7 @@ export default function Stats() {
               className={cn(
                 "rounded-lg px-3.5 py-1.5 text-sm transition",
                 activeView.kind === "all"
-                  ? "bg-surface font-medium text-ink shadow-sm"
+                  ? "bg-accent text-accent-ink shadow-sm"
                   : "text-ink-muted hover:text-ink",
               )}
             >
