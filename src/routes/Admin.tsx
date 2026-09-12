@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import {
   Button,
   Card,
@@ -105,11 +105,13 @@ export default function Admin() {
       <header>
         <h1 className="text-2xl font-bold tracking-tight text-ink">Admin</h1>
         <p className="mt-1 text-sm text-ink-muted">
-          Grading happens on the ticket itself — this page is for weeks, seasons and people.
+          Grading and closing a week happen on{" "}
+          <Link to="/" className="font-medium text-accent hover:underline">
+            This week
+          </Link>
+          . This page is for the settings behind them.
         </p>
       </header>
-
-      <LegLinkRepair leagueId={leagueId} weeks={weeks} members={members} />
 
       <MemberAdmin
         leagueId={leagueId}
@@ -160,6 +162,8 @@ export default function Admin() {
           )}
         </CardBody>
       </Card>
+
+      <LegLinkRepair leagueId={leagueId} weeks={weeks} members={members} />
 
       <Card>
         <CardHeader title="League" />

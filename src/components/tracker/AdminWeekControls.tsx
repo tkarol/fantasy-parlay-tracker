@@ -43,6 +43,8 @@ export function AdminWeekControls({
   const [payout, setPayout] = useState(week.payoutOverride === null ? "" : String(week.payoutOverride));
   const [busy, setBusy] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmClose, setConfirmClose] = useState(false);
+  const pendingLegs = legs.filter((leg) => leg.result === "Pending").length;
 
   const deadlinePreview = (() => {
     const ms = Date.parse(deadline);
@@ -76,6 +78,23 @@ export function AdminWeekControls({
     } finally {
       setBusy(null);
     }
+  }
+
+  async function closeAndOpenNext() {
+    await run(
+      "close",
+      async () => {
+        const nextId = await closeWeekAndOpenNext(
+          leagueId,
+          week,
+          weeks.map((w) => w.id),
+          deadlineRule,
+        );
+        onWeekChange(nextId);
+      },
+      "Week closed and the next one opened",
+    );
+    setConfirmClose(false);
   }
 
   const missingMembers = members.filter(
@@ -233,21 +252,13 @@ export function AdminWeekControls({
           <Button
             variant="primary"
             loading={busy === "close"}
-            onClick={() =>
-              void run(
-                "close",
-                async () => {
-                  const nextId = await closeWeekAndOpenNext(
-                    leagueId,
-                    week,
-                    weeks.map((w) => w.id),
-                    deadlineRule,
-                  );
-                  onWeekChange(nextId);
-                },
-                "Week closed and the next one opened",
-              )
-            }
+            onClick={() => {
+              if (pendingLegs > 0) {
+                setConfirmClose(true);
+                return;
+              }
+              void closeAndOpenNext();
+            }}
           >
             Close week &amp; open next
           </Button>
@@ -256,6 +267,16 @@ export function AdminWeekControls({
           Delete week
         </Button>
       </div>
+
+      <ConfirmDialog
+        open={confirmClose}
+        title={`${pendingLegs} leg${pendingLegs === 1 ? "" : "s"} still ungraded`}
+        confirmLabel="Close anyway"
+        busy={busy === "close"}
+        message="A week that closes with legs ungraded never settles, so it stays out of the standings and the season totals until someone grades them. Grading first is usually what you want."
+        onCancel={() => setConfirmClose(false)}
+        onConfirm={() => void closeAndOpenNext()}
+      />
 
       <ConfirmDialog
         open={confirmDelete}

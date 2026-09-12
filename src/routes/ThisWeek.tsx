@@ -16,6 +16,8 @@ import { LegList } from "../components/tracker/LegList";
 import { YourLegCard } from "../components/tracker/YourLegCard";
 import { TicketScreenshot } from "../components/tracker/TicketScreenshot";
 import { MissingPicks } from "../components/tracker/MissingPicks";
+import { AdminWeekBar } from "../components/tracker/AdminWeekBar";
+import { deadlineRuleOf } from "../lib/api";
 import { SweatStatus } from "../components/tracker/SweatStatus";
 import { WeekAwards } from "../components/tracker/WeekAwards";
 import { GradeWeekDialog } from "../components/tracker/GradeWeekDialog";
@@ -34,7 +36,7 @@ import { isWeekOpen, settleWeek } from "../lib/parlay";
  */
 export default function ThisWeek() {
   const { user } = useAuth();
-  const { leagueId, weeks, weeksLoading, weeksError, members, isAdmin, isMember, leagueName } =
+  const { leagueId, league, weeks, weeksLoading, weeksError, members, isAdmin, isMember, leagueName } =
     useLeagueContext();
   const now = useNow();
 
@@ -169,6 +171,18 @@ export default function ThisWeek() {
               leagueName={leagueName}
               now={now}
               open={open}
+            />
+          )}
+          {isAdmin && settlement && (
+            <AdminWeekBar
+              leagueId={leagueId}
+              week={week}
+              weeks={weeks}
+              settlement={settlement}
+              deadlineRule={deadlineRuleOf(league)}
+              open={open}
+              onGrade={() => setGradingOpen(true)}
+              onWeekChange={setSelectedId}
             />
           )}
         </CardBody>
