@@ -1,15 +1,28 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Badge, Card, CardBody, CardHeader, EmptyState, ErrorState, SkeletonText } from "../components/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  CardBody,
+  CardHeader,
+  EmptyState,
+  ErrorState,
+  SkeletonText,
+} from "../components/ui";
 import { WeekNav } from "../components/tracker/WeekNav";
 import { TicketSummary } from "../components/tracker/TicketSummary";
 import { DeadlineCountdown } from "../components/tracker/DeadlineCountdown";
 import { LegList } from "../components/tracker/LegList";
 import { MyLegForm } from "../components/tracker/MyLegForm";
 import { TicketScreenshot } from "../components/tracker/TicketScreenshot";
+import { MissingPicks } from "../components/tracker/MissingPicks";
+import { SweatStatus } from "../components/tracker/SweatStatus";
+import { GradeWeekDialog } from "../components/tracker/GradeWeekDialog";
 import { useAuth } from "../hooks/useAuth";
 import { useLeagueContext } from "../hooks/useLeagueContext";
 import { useLegs } from "../hooks/useLegs";
+import { useReactions } from "../hooks/useReactions";
 import { useNow } from "../hooks/useNow";
 import { describeFirestoreError } from "../hooks/firestoreState";
 import { isWeekOpen, settleWeek } from "../lib/parlay";
@@ -20,11 +33,12 @@ import { isWeekOpen, settleWeek } from "../lib/parlay";
  */
 export default function ThisWeek() {
   const { user } = useAuth();
-  const { leagueId, weeks, weeksLoading, weeksError, members, isAdmin, isMember } =
+  const { leagueId, weeks, weeksLoading, weeksError, members, isAdmin, isMember, leagueName } =
     useLeagueContext();
   const now = useNow();
 
   const [selectedId, setSelectedId] = useState("");
+  const [gradingOpen, setGradingOpen] = useState(false);
 
   // Open on the newest week, but never override a week the user picked.
   useEffect(() => {
@@ -39,6 +53,7 @@ export default function ThisWeek() {
 
   const week = weeks.find((candidate) => candidate.id === selectedId) ?? null;
   const { legs, loading: legsLoading, error: legsError } = useLegs(leagueId ?? undefined, week?.id);
+  const reactions = useReactions(leagueId ?? undefined, week?.id);
 
   const settlement = useMemo(() => (week ? settleWeek(week, legs) : null), [week, legs]);
   const myLeg = useMemo(
@@ -150,8 +165,24 @@ export default function ThisWeek() {
           description={<DeadlineCountdown week={week} now={now} />}
           actions={<WeekNav weeks={weeks} selectedId={week.id} onSelect={setSelectedId} />}
         />
-        <CardBody>{settlement && <TicketSummary week={week} settlement={settlement} />}</CardBody>
+        <CardBody className="space-y-3">
+          {settlement && <TicketSummary week={week} settlement={settlement} />}
+          {isMember && (
+            <MissingPicks
+              week={week}
+              legs={legs}
+              members={members}
+              leagueName={leagueName}
+              now={now}
+              open={open}
+            />
+          )}
+        </CardBody>
       </Card>
+
+      {settlement && legs.length > 0 && (
+        <SweatStatus legs={legs} settlement={settlement} stake={week.stake} />
+      )}
 
       {needsLeg && legForm}
 
@@ -161,6 +192,13 @@ export default function ThisWeek() {
             <CardHeader
               title="The ticket"
               description={`${legs.length} of ${members.length} member${members.length === 1 ? "" : "s"} in`}
+              actions={
+                isAdmin && legs.length > 0 ? (
+                  <Button size="sm" variant="secondary" onClick={() => setGradingOpen(true)}>
+                    Grade all
+                  </Button>
+                ) : undefined
+              }
             />
             <CardBody>
               {legsError ? (
@@ -175,6 +213,9 @@ export default function ThisWeek() {
                   isAdmin={isAdmin}
                   adminUid={user?.uid ?? ""}
                   currentUid={user?.uid ?? null}
+                  user={user}
+                  reactions={reactions}
+                  canReact={isMember}
                 />
               )}
             </CardBody>
@@ -190,6 +231,17 @@ export default function ThisWeek() {
           </CardBody>
         </Card>
       </div>
+
+      {isAdmin && user && (
+        <GradeWeekDialog
+          open={gradingOpen}
+          onClose={() => setGradingOpen(false)}
+          leagueId={leagueId}
+          week={week}
+          legs={legs}
+          adminUid={user.uid}
+        />
+      )}
     </Shell>
   );
 }

@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { combineDecimal, isWeekOpen, settleParlay, settleWeek } from "./parlay";
+import {
+  combineDecimal,
+  formatOneIn,
+  isWeekOpen,
+  longshotComparison,
+  settleParlay,
+  settleWeek,
+  ticketOdds,
+} from "./parlay";
 import { leg, makeWeek } from "./testing";
 
 describe("combineDecimal", () => {
@@ -149,5 +157,61 @@ describe("isWeekOpen", () => {
 
   it("treats a missing deadline as open", () => {
     expect(isWeekOpen(makeWeek({ deadline: null }), now)).toBe(true);
+  });
+});
+
+describe("ticketOdds", () => {
+  it("turns a price into a plain chance", () => {
+    // A +100 double is 4.0 decimal — one in four.
+    const odds = ticketOdds(4);
+    expect(odds?.probability).toBeCloseTo(0.25, 6);
+    expect(odds?.oneIn).toBeCloseTo(4, 6);
+  });
+
+  it("is null when the ticket cannot be priced", () => {
+    expect(ticketOdds(null)).toBeNull();
+    expect(ticketOdds(1)).toBeNull();
+  });
+});
+
+describe("formatOneIn", () => {
+  it("scales the wording with the number", () => {
+    expect(formatOneIn(4)).toBe("1 in 4.0");
+    expect(formatOneIn(340)).toBe("1 in 340");
+    expect(formatOneIn(24_000)).toBe("1 in 24k");
+    expect(formatOneIn(1_250_000)).toBe("1 in 1.3M");
+  });
+
+  it("does not pretend a coin flip is a longshot", () => {
+    expect(formatOneIn(1)).toBe("even money");
+  });
+});
+
+describe("longshotComparison", () => {
+  it("finds the leg costing the most and prices the ticket without it", () => {
+    const comparison = longshotComparison([
+      leg("a", -110, "Pending"),
+      leg("b", -110, "Pending"),
+      leg("c", 900, "Pending"), // the longshot
+    ]);
+
+    expect(comparison?.leg.uid).toBe("c");
+    // Dropping a 10.0 leg must make the ticket roughly ten times likelier.
+    expect(comparison!.without.oneIn).toBeCloseTo(comparison!.with.oneIn / 10, 4);
+    expect(comparison!.without.oneIn).toBeLessThan(comparison!.with.oneIn);
+  });
+
+  it("ignores legs that pushed, since they are off the ticket", () => {
+    const comparison = longshotComparison([
+      leg("a", -110, "Pending"),
+      leg("b", -110, "Pending"),
+      leg("c", 5000, "Push"),
+    ]);
+    expect(comparison?.leg.uid).not.toBe("c");
+  });
+
+  it("needs at least two priced legs to say anything", () => {
+    expect(longshotComparison([leg("a", -110)])).toBeNull();
+    expect(longshotComparison([leg("a", -110), leg("b", null)])).toBeNull();
   });
 });

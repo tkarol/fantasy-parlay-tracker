@@ -46,7 +46,13 @@ export function Modal({ open, onClose, title, description, children, footer, siz
     document.body.style.overflow = "hidden";
 
     const previouslyFocused = document.activeElement as HTMLElement | null;
-    panelRef.current?.querySelector<HTMLElement>("button, input, textarea, select")?.focus();
+    // Content can claim the initial focus with data-autofocus; otherwise the
+    // first control gets it. Without the opt-out, a dialog whose body is
+    // keyboard-driven would lose its keys to the close button.
+    const target =
+      panelRef.current?.querySelector<HTMLElement>("[data-autofocus]") ??
+      panelRef.current?.querySelector<HTMLElement>("button, input, textarea, select");
+    target?.focus();
 
     return () => {
       document.removeEventListener("keydown", onKeyDown);

@@ -23,6 +23,7 @@ import {
   leaguesCol,
   legDoc,
   legsCol,
+  reactionDoc,
   memberDoc,
   ticketImageDoc,
   weekDoc,
@@ -30,7 +31,7 @@ import {
 import { leagueConverter } from "./converters";
 import { makeInviteCode, makeLeagueId, weekId as makeWeekId } from "./rand";
 import { nextThursdaySixPm } from "./dates";
-import type { LegResult, Member, MemberRole, Week } from "../types/models";
+import type { LegResult, Member, MemberRole, ReactionEmoji, Week } from "../types/models";
 
 /**
  * Every Firestore write in the app lives here.
@@ -502,6 +503,68 @@ export async function adminAddLegForMember(
     },
     { merge: true },
   );
+}
+
+/**
+ * Grade several legs at once.
+ *
+ * Eight legs a week, graded one click at a time, is the chore that makes an
+ * admin stop running the league. One batch also means the ticket never shows a
+ * half-graded state to anyone watching.
+ */
+export async function gradeLegs(
+  leagueId: string,
+  weekIdValue: string,
+  grades: readonly { legId: string; result: LegResult }[],
+  adminUid: string,
+): Promise<number> {
+  if (grades.length === 0) return 0;
+
+  const batch = writeBatch(db);
+  for (const { legId, result } of grades) {
+    batch.update(legDoc(leagueId, weekIdValue, legId), {
+      result,
+      gradedByUid: adminUid,
+      gradedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  }
+  await batch.commit();
+  return grades.length;
+}
+
+// ---------------------------------------------------------------------------
+// Reactions
+// ---------------------------------------------------------------------------
+
+/**
+ * Set or clear your reaction to someone's leg.
+ *
+ * One document per person per leg, so reacting never has to read-modify-write
+ * a shared list and two people tapping at once cannot clobber each other.
+ */
+export async function setReaction(
+  leagueId: string,
+  weekIdValue: string,
+  legId: string,
+  user: User,
+  emoji: ReactionEmoji,
+): Promise<void> {
+  await setDoc(reactionDoc(leagueId, weekIdValue, legId, user.uid), {
+    legId,
+    uid: user.uid,
+    name: displayNameFor(user),
+    emoji,
+  });
+}
+
+export async function clearReaction(
+  leagueId: string,
+  weekIdValue: string,
+  legId: string,
+  uid: string,
+): Promise<void> {
+  await deleteDoc(reactionDoc(leagueId, weekIdValue, legId, uid));
 }
 
 // ---------------------------------------------------------------------------

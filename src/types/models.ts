@@ -109,3 +109,18 @@ export interface InviteCode {
   leagueName: string;
   active: boolean;
 }
+
+/** The only reactions a leg accepts. Kept short so the row stays tappable. */
+export const REACTION_EMOJI = ["🔥", "🎯", "😬", "💀", "🤡"] as const;
+export type ReactionEmoji = (typeof REACTION_EMOJI)[number];
+
+export function isReactionEmoji(value: unknown): value is ReactionEmoji {
+  return REACTION_EMOJI.includes(value as ReactionEmoji);
+}
+
+export interface Reaction {
+  legId: string;
+  uid: string;
+  name: string;
+  emoji: ReactionEmoji;
+}

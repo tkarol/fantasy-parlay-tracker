@@ -188,3 +188,73 @@ export function millisUntilDeadline(week: Week | null | undefined, now: Date): n
   if (!week?.deadline) return null;
   return week.deadline.getTime() - now.getTime();
 }
+
+// ---------------------------------------------------------------------------
+// How likely is this, really
+// ---------------------------------------------------------------------------
+
+export interface TicketOdds {
+  /** Break-even probability implied by the combined price, 0..1. */
+  probability: number;
+  /** The same, as the N in "1 in N". */
+  oneIn: number;
+}
+
+/**
+ * What the market says this ticket's chances are.
+ *
+ * An eight-leg parlay is a lottery ticket and the price says so plainly, which
+ * is worth showing: a league that never wins is easier to enjoy when everyone
+ * can see it was never going to.
+ */
+export function ticketOdds(combinedDecimal: number | null): TicketOdds | null {
+  if (combinedDecimal === null || combinedDecimal <= 1) return null;
+  const probability = 1 / combinedDecimal;
+  return { probability, oneIn: 1 / probability };
+}
+
+export interface LongshotComparison {
+  /** The leg carrying the longest price — the one costing the most chance. */
+  leg: Leg;
+  /** The ticket's odds with every other counting leg. */
+  without: TicketOdds;
+  /** The ticket's odds as it stands. */
+  with: TicketOdds;
+}
+
+/**
+ * The ticket without its longest leg, for the "drop that one and it's 1 in 40"
+ * comparison. Null unless there are at least two priced legs to compare.
+ */
+export function longshotComparison(legs: readonly Leg[]): LongshotComparison | null {
+  const counting = legs.filter((leg) => !isVoidingResult(leg.result) && leg.odds !== null);
+  if (counting.length < 2) return null;
+
+  const full = combineDecimal(counting.map((leg) => leg.odds));
+  if (full === null) return null;
+
+  let longest = counting[0]!;
+  for (const leg of counting) {
+    const current = americanToDecimal(leg.odds) ?? 0;
+    const best = americanToDecimal(longest.odds) ?? 0;
+    if (current > best) longest = leg;
+  }
+
+  const rest = counting.filter((leg) => leg.id !== longest.id);
+  const without = combineDecimal(rest.map((leg) => leg.odds));
+
+  const withOdds = ticketOdds(full);
+  const withoutOdds = ticketOdds(without);
+  if (!withOdds || !withoutOdds) return null;
+
+  return { leg: longest, with: withOdds, without: withoutOdds };
+}
+
+/** `1 in 340`, or `1 in 1.2M` once the numbers stop meaning anything. */
+export function formatOneIn(oneIn: number): string {
+  if (!Number.isFinite(oneIn) || oneIn <= 1) return "even money";
+  if (oneIn >= 1_000_000) return `1 in ${(oneIn / 1_000_000).toFixed(1)}M`;
+  if (oneIn >= 10_000) return `1 in ${Math.round(oneIn / 1000)}k`;
+  if (oneIn >= 100) return `1 in ${Math.round(oneIn)}`;
+  return `1 in ${oneIn.toFixed(1)}`;
+}

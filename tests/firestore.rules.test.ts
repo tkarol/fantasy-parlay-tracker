@@ -428,3 +428,55 @@ describe("ticket screenshot", () => {
     await assertSucceeds(deleteDoc(doc(as(ADMIN), ...imagePath(OPEN_WEEK))));
   });
 });
+
+describe("reactions", () => {
+  const path = (legUid: string, byUid: string) =>
+    ["leagues", LEAGUE, "weeks", OPEN_WEEK, "reactions", `${legUid}__${byUid}`] as const;
+
+  const body = (legUid: string, byUid: string, emoji = "\u{1F525}") => ({
+    legId: legUid,
+    uid: byUid,
+    name: "Someone",
+    emoji,
+  });
+
+  it("lets a member react to someone else's leg", async () => {
+    await assertSucceeds(setDoc(doc(as(OTHER), ...path(MEMBER, OTHER)), body(MEMBER, OTHER)));
+  });
+
+  it("is readable across the league", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), ...path(MEMBER, OTHER)), body(MEMBER, OTHER));
+    });
+    await assertSucceeds(getDoc(doc(as(ADMIN), ...path(MEMBER, OTHER))));
+    await assertFails(getDoc(doc(as(OUTSIDER), ...path(MEMBER, OTHER))));
+  });
+
+  // The document id encodes the author, which is what makes this checkable.
+  it("cannot be posted in someone else's name", async () => {
+    await assertFails(setDoc(doc(as(OTHER), ...path(MEMBER, ADMIN)), body(MEMBER, ADMIN)));
+  });
+
+  it("cannot claim an id that disagrees with its uid", async () => {
+    await assertFails(setDoc(doc(as(OTHER), ...path(MEMBER, OTHER)), body(MEMBER, ADMIN)));
+  });
+
+  it("cannot be left by a non-member", async () => {
+    await assertFails(setDoc(doc(as(OUTSIDER), ...path(MEMBER, OUTSIDER)), body(MEMBER, OUTSIDER)));
+  });
+
+  it("refuses an oversized payload dressed up as an emoji", async () => {
+    await assertFails(
+      setDoc(doc(as(OTHER), ...path(MEMBER, OTHER)), body(MEMBER, OTHER, "x".repeat(400))),
+    );
+    await assertFails(setDoc(doc(as(OTHER), ...path(MEMBER, OTHER)), body(MEMBER, OTHER, "")));
+  });
+
+  it("can be taken back only by its author", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), ...path(MEMBER, OTHER)), body(MEMBER, OTHER));
+    });
+    await assertFails(deleteDoc(doc(as(MEMBER), ...path(MEMBER, OTHER))));
+    await assertSucceeds(deleteDoc(doc(as(OTHER), ...path(MEMBER, OTHER))));
+  });
+});

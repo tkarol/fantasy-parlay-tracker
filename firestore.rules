@@ -6,6 +6,7 @@ rules_version = '2';
 //     members/{uid}                           role: admin | member
 //     weeks/{weekId}                          one weekly ticket (id = "{season}-{week}")
 //       media/ticket                          screenshot of the real ticket
+//       reactions/{legId}__{uid}              one reaction per person per leg
 //       legs/{uid}                            one leg per member (doc id IS the member uid)
 //     joinRequests/{uid}                      pending access requests
 //   inviteCodes/{CODE}                        public code -> leagueId lookup
@@ -194,6 +195,27 @@ service cloud.firestore {
           && request.resource.data.closed is bool;
 
         allow delete: if canAdmin(leagueId);
+
+        // ---------- reactions ----------
+        // One document per person per leg, with the id encoding both. That is
+        // what makes ownership checkable here: editing a shared array of
+        // reactions could not be validated this precisely.
+
+        match /reactions/{reactionId} {
+          allow read: if isMember(leagueId) || isOwner(leagueId);
+
+          allow create, update: if isMember(leagueId)
+            && request.resource.data.uid == uid()
+            && request.resource.data.legId is string
+            && reactionId == request.resource.data.legId + '__' + uid()
+            // Which emoji are offered is the UI's business; what matters here
+            // is that a reaction is yours and is small.
+            && request.resource.data.emoji is string
+            && request.resource.data.emoji.size() > 0
+            && request.resource.data.emoji.size() <= 8;
+
+          allow delete: if isMember(leagueId) && resource.data.uid == uid();
+        }
 
         // ---------- ticket screenshot ----------
         // The image lives here rather than in Cloud Storage precisely so that

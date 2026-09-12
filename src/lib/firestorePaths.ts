@@ -33,6 +33,20 @@ export const inviteCodesCol = () => collection(db, "inviteCodes");
 export const inviteCodeDoc = (code: string) => doc(db, "inviteCodes", code.toUpperCase());
 
 /**
+ * Reactions for a week, one document per person per leg.
+ *
+ * The document id encodes both, which is what lets the rules check ownership
+ * without having to reason about edits to a shared array.
+ */
+export const reactionsCol = (leagueId: string, weekId: string) =>
+  collection(db, "leagues", leagueId, "weeks", weekId, "reactions");
+
+export const reactionId = (legId: string, uid: string) => `${legId}__${uid}`;
+
+export const reactionDoc = (leagueId: string, weekId: string, legId: string, uid: string) =>
+  doc(db, "leagues", leagueId, "weeks", weekId, "reactions", reactionId(legId, uid));
+
+/**
  * The week's ticket screenshot, in its own document.
  *
  * Kept out of the week document on purpose: the app subscribes to every week

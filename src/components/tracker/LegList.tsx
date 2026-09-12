@@ -1,11 +1,13 @@
 import { useState } from "react";
+import type { User } from "firebase/auth";
 import { Badge, Button, ConfirmDialog, EmptyState, Input, Select } from "../ui";
 import { ResultBadge } from "./ResultBadge";
+import { LegReactions } from "./LegReactions";
 import { resultAccent } from "./resultAccent";
 import { useToast } from "../../hooks/useToast";
 import { adminUpdateLeg, deleteLeg, gradeLeg } from "../../lib/api";
 import { americanToDecimal, formatAmerican, parseAmerican } from "../../lib/odds";
-import { LEG_RESULTS, type Leg, type LegResult, type Week } from "../../types/models";
+import { LEG_RESULTS, type Leg, type LegResult, type Reaction, type Week } from "../../types/models";
 import { cn } from "../../lib/cn";
 
 export function LegList({
@@ -15,6 +17,9 @@ export function LegList({
   isAdmin,
   adminUid,
   currentUid,
+  user,
+  reactions,
+  canReact,
 }: {
   leagueId: string;
   week: Week;
@@ -22,6 +27,9 @@ export function LegList({
   isAdmin: boolean;
   adminUid: string;
   currentUid: string | null;
+  user: User | null;
+  reactions: Record<string, Reaction[]>;
+  canReact: boolean;
 }) {
   const toast = useToast();
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -99,6 +107,14 @@ export function LegList({
                     {leg.odds === null && <Badge tone="warn">No odds</Badge>}
                   </div>
                   <p className="mt-0.5 break-words text-sm text-ink-muted">{leg.leg || "—"}</p>
+                  <LegReactions
+                    leagueId={leagueId}
+                    weekId={week.id}
+                    legId={leg.id}
+                    reactions={reactions[leg.id] ?? []}
+                    user={user}
+                    canReact={canReact}
+                  />
                 </div>
 
                 <div className="flex shrink-0 items-center gap-2">
