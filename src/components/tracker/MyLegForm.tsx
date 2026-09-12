@@ -11,6 +11,8 @@ import {
   parseAmerican,
 } from "../../lib/odds";
 import { combineDecimal } from "../../lib/parlay";
+import { parsePick } from "../../lib/slip";
+import { OddsInput } from "./OddsField";
 import type { Leg, Week } from "../../types/models";
 
 /**
@@ -56,6 +58,18 @@ export function MyLegForm({
   // Live preview of what this leg does to the ticket.
   const projected = combineDecimal([...otherLegs.map((leg) => leg.odds), parsedOdds]);
   const myDecimal = americanToDecimal(parsedOdds);
+
+  /** Split a price off the pick text into the odds box. */
+  function absorbPrice(raw: string, { onlyIfEmpty }: { onlyIfEmpty: boolean }) {
+    const parsed = parsePick(raw);
+    if (parsed.odds === null) return false;
+    if (onlyIfEmpty && odds.trim() !== "") return false;
+
+    setText(parsed.leg);
+    setOdds(String(parsed.odds));
+    setOddsError(null);
+    return true;
+  }
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -118,29 +132,33 @@ export function MyLegForm({
               id={id}
               value={text}
               onChange={(event) => setText(event.target.value)}
-              placeholder="Bills -3.5 vs Jets"
+              onPaste={(event) => {
+                const pasted = event.clipboardData.getData("text");
+                // Paste straight from a sportsbook and the price lands in the
+                // right box instead of being retyped.
+                if (parsePick(pasted).odds !== null) {
+                  event.preventDefault();
+                  absorbPrice(pasted, { onlyIfEmpty: false });
+                }
+              }}
+              onBlur={(event) => absorbPrice(event.target.value, { onlyIfEmpty: true })}
+              placeholder="Bills -3.5 (-110)"
               maxLength={500}
               autoComplete="off"
             />
           )}
         </Field>
 
-        <Field
-          label="Odds"
-          error={oddsError}
-          hint={myDecimal ? `${myDecimal.toFixed(2)}x` : "American, e.g. -110"}
-        >
+        <Field label="Odds" error={oddsError} hint={myDecimal ? undefined : "Or paste the whole line above"}>
           {(id) => (
-            <Input
+            <OddsInput
               id={id}
               value={odds}
-              onChange={(event) => {
-                setOdds(event.target.value);
+              invalid={oddsLooksWrong}
+              onChange={(next) => {
+                setOdds(next);
                 setOddsError(null);
               }}
-              placeholder="-110"
-              inputMode="text"
-              className={oddsLooksWrong ? "border-rose-500/60" : undefined}
             />
           )}
         </Field>

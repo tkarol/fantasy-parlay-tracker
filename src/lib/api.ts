@@ -534,6 +534,30 @@ export async function adminAddLegForMember(
 }
 
 /**
+ * Write prices onto several legs at once.
+ *
+ * Used by the paste-a-slip flow, where an admin has the real ticket on screen
+ * and should not retype eight numbers off it.
+ */
+export async function setLegOdds(
+  leagueId: string,
+  weekIdValue: string,
+  prices: readonly { legId: string; odds: number }[],
+): Promise<number> {
+  if (prices.length === 0) return 0;
+
+  const batch = writeBatch(db);
+  for (const { legId, odds } of prices) {
+    batch.update(legDoc(leagueId, weekIdValue, legId), {
+      odds,
+      updatedAt: serverTimestamp(),
+    });
+  }
+  await batch.commit();
+  return prices.length;
+}
+
+/**
  * Grade several legs at once.
  *
  * Eight legs a week, graded one click at a time, is the chore that makes an

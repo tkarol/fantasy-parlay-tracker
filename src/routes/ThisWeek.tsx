@@ -20,6 +20,7 @@ import { MissingPicks } from "../components/tracker/MissingPicks";
 import { SweatStatus } from "../components/tracker/SweatStatus";
 import { WeekAwards } from "../components/tracker/WeekAwards";
 import { GradeWeekDialog } from "../components/tracker/GradeWeekDialog";
+import { FillOddsDialog } from "../components/tracker/FillOddsDialog";
 import { useAuth } from "../hooks/useAuth";
 import { useLeagueContext } from "../hooks/useLeagueContext";
 import { useLegs } from "../hooks/useLegs";
@@ -40,6 +41,7 @@ export default function ThisWeek() {
 
   const [selectedId, setSelectedId] = useState("");
   const [gradingOpen, setGradingOpen] = useState(false);
+  const [fillOddsOpen, setFillOddsOpen] = useState(false);
 
   // Open on the newest week, but never override a week the user picked.
   useEffect(() => {
@@ -199,9 +201,14 @@ export default function ThisWeek() {
               description={`${legs.length} of ${members.length} member${members.length === 1 ? "" : "s"} in`}
               actions={
                 isAdmin && legs.length > 0 ? (
-                  <Button size="sm" variant="secondary" onClick={() => setGradingOpen(true)}>
-                    Grade all
-                  </Button>
+                  <>
+                    <Button size="sm" variant="secondary" onClick={() => setFillOddsOpen(true)}>
+                      Paste slip
+                    </Button>
+                    <Button size="sm" variant="secondary" onClick={() => setGradingOpen(true)}>
+                      Grade all
+                    </Button>
+                  </>
                 ) : undefined
               }
             />
@@ -236,6 +243,16 @@ export default function ThisWeek() {
           </CardBody>
         </Card>
       </div>
+
+      {isAdmin && (
+        <FillOddsDialog
+          open={fillOddsOpen}
+          onClose={() => setFillOddsOpen(false)}
+          leagueId={leagueId}
+          week={week}
+          legs={legs}
+        />
+      )}
 
       {isAdmin && user && (
         <GradeWeekDialog

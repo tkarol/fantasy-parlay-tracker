@@ -7,6 +7,8 @@ import { resultAccent } from "./resultAccent";
 import { useToast } from "../../hooks/useToast";
 import { adminUpdateLeg, deleteLeg, gradeLeg } from "../../lib/api";
 import { americanToDecimal, formatAmerican, parseAmerican } from "../../lib/odds";
+import { parsePick } from "../../lib/slip";
+import { QuickPrices } from "./OddsField";
 import { LEG_RESULTS, type Leg, type LegResult, type Reaction, type Week } from "../../types/models";
 import { cn } from "../../lib/cn";
 
@@ -229,17 +231,34 @@ function AdminLegEditor({
           placeholder="Member name"
           aria-label="Member name"
         />
-        <Input
-          value={odds}
-          onChange={(event) => setOdds(event.target.value)}
-          placeholder="Odds, e.g. -110"
-          aria-label="Odds"
-        />
+        <div className="space-y-1.5">
+          <Input
+            value={odds}
+            onChange={(event) => setOdds(event.target.value)}
+            placeholder="Odds, e.g. -110"
+            aria-label="Odds"
+          />
+          <QuickPrices value={odds} onPick={setOdds} />
+        </div>
       </div>
       <Input
         value={text}
         onChange={(event) => setText(event.target.value)}
-        placeholder="Leg description"
+        onPaste={(event) => {
+          const parsed = parsePick(event.clipboardData.getData("text"));
+          if (parsed.odds === null) return;
+          event.preventDefault();
+          setText(parsed.leg);
+          setOdds(String(parsed.odds));
+        }}
+        onBlur={(event) => {
+          if (odds.trim() !== "") return;
+          const parsed = parsePick(event.target.value);
+          if (parsed.odds === null) return;
+          setText(parsed.leg);
+          setOdds(String(parsed.odds));
+        }}
+        placeholder="Leg description — paste the whole line and the price splits out"
         aria-label="Leg description"
       />
       <div className="flex flex-wrap items-center gap-2">
