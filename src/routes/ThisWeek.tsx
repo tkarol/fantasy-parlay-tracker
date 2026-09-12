@@ -11,7 +11,6 @@ import {
   SkeletonText,
 } from "../components/ui";
 import { WeekNav } from "../components/tracker/WeekNav";
-import { TicketSummary } from "../components/tracker/TicketSummary";
 import { DeadlineCountdown } from "../components/tracker/DeadlineCountdown";
 import { LegList } from "../components/tracker/LegList";
 import { YourLegCard } from "../components/tracker/YourLegCard";
@@ -159,7 +158,9 @@ export default function ThisWeek() {
           actions={<WeekNav weeks={weeks} selectedId={week.id} onSelect={setSelectedId} />}
         />
         <CardBody className="space-y-3">
-          {settlement && <TicketSummary week={week} settlement={settlement} />}
+          {settlement && legs.length > 0 && (
+            <SweatStatus legs={legs} settlement={settlement} week={week} />
+          )}
           {isMember && (
             <MissingPicks
               week={week}
@@ -172,10 +173,6 @@ export default function ThisWeek() {
           )}
         </CardBody>
       </Card>
-
-      {settlement && legs.length > 0 && (
-        <SweatStatus legs={legs} settlement={settlement} stake={week.stake} />
-      )}
 
       {settlement?.settled && (
         <WeekAwards ticket={{ week, legs, settlement }} />

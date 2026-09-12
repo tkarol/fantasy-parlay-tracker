@@ -171,7 +171,12 @@ export function MyLegForm({
         </Field>
       </div>
 
-      {projected !== null && (
+      {/*
+        A preview of what this leg does to the ticket. Only while it would
+        actually change something — repeating the ticket's own figure back at
+        someone who has already submitted is noise.
+      */}
+      {projected !== null && (myLeg === null || parsedOdds !== myLeg.odds) && (
         <p className="rounded-lg bg-surface-3 px-3 py-2 text-xs text-ink-muted">
           With your leg the ticket prices at{" "}
           <span className="font-semibold tnum text-ink">

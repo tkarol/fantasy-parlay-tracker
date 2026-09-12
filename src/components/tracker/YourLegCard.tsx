@@ -59,7 +59,10 @@ export function YourLegCard({
           <h2 className="text-base font-semibold text-ink">
             {myLeg ? "You're on this ticket" : "Your leg"}
           </h2>
-          {myLeg && <span className="text-sm text-ink-muted">— change it any time before the lock.</span>}
+          {/* Only offer an edit that is actually still possible. */}
+          {myLeg && !disabled && (
+            <span className="text-sm text-ink-muted">— change it any time before the lock.</span>
+          )}
         </div>
         <CardBody>
           <MyLegForm

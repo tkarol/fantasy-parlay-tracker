@@ -1,6 +1,7 @@
 import { formatOneIn, longshotComparison, ticketOdds, type ParlaySettlement } from "../../lib/parlay";
 import { formatAmerican, formatUsd } from "../../lib/odds";
-import { isVoidingResult, type Leg } from "../../types/models";
+import { Badge } from "../ui";
+import { isVoidingResult, type Leg, type Week } from "../../types/models";
 import { cn } from "../../lib/cn";
 
 /**
@@ -13,12 +14,13 @@ import { cn } from "../../lib/cn";
 export function SweatStatus({
   legs,
   settlement,
-  stake,
+  week,
 }: {
   legs: Leg[];
   settlement: ParlaySettlement;
-  stake: number;
+  week: Week;
 }) {
+  const stake = week.stake;
   const counting = legs.filter((leg) => !isVoidingResult(leg.result));
   const remaining = settlement.pendingLegs;
 
@@ -63,7 +65,16 @@ export function SweatStatus({
           <div className="text-xl font-extrabold tracking-tight text-ink sm:text-2xl">
             {headline}
           </div>
-          <div className="text-xs text-ink-muted">{subline}</div>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-muted">
+            <span>{subline}</span>
+            {/* A voided leg is off the ticket, which is why the price moved. */}
+            {settlement.voidedLegs > 0 && (
+              <Badge tone="warn">
+                {settlement.voidedLegs} voided
+              </Badge>
+            )}
+            {week.payoutOverride !== null && <Badge tone="info">payout recorded</Badge>}
+          </div>
         </div>
 
         {!settlement.settled && settlement.potentialProfit !== null && (
@@ -98,6 +109,13 @@ export function SweatStatus({
       </ul>
 
       <TicketOddsLine legs={legs} settlement={settlement} stake={stake} />
+
+      {settlement.status === "won" && !settlement.allPriced && (
+        <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+          This won, but a leg has no price recorded — an admin can add it, or record what the
+          book actually paid.
+        </p>
+      )}
     </div>
   );
 }
