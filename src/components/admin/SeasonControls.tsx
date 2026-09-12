@@ -3,7 +3,7 @@ import { Badge, Button, Card, CardBody, CardHeader, Field, Input, Modal } from "
 import { useToast } from "../../hooks/useToast";
 import { startSeason } from "../../lib/api";
 import { nextSeasonNumber } from "../../lib/stats";
-import { nextThursdaySixPm } from "../../lib/dates";
+import { describeDeadlineRule, type DeadlineRule } from "../../lib/dates";
 import type { Week } from "../../types/models";
 
 /**
@@ -16,12 +16,14 @@ export function SeasonControls({
   weeks,
   seasons,
   defaultStake,
+  deadlineRule,
   onSeasonStarted,
 }: {
   leagueId: string;
   weeks: Week[];
   seasons: number[];
   defaultStake: number;
+  deadlineRule: DeadlineRule;
   onSeasonStarted: (weekId: string) => void;
 }) {
   const toast = useToast();
@@ -86,7 +88,7 @@ export function SeasonControls({
         open={open}
         onClose={() => setOpen(false)}
         title="Start a new season"
-        description="This opens week 1. Nothing about earlier seasons changes."
+        description={`Opens week 1, locking ${describeDeadlineRule(deadlineRule)}. Nothing about earlier seasons changes.`}
         footer={
           <>
             <Button variant="ghost" onClick={() => setOpen(false)}>
@@ -113,12 +115,7 @@ export function SeasonControls({
 
                 setSaving(true);
                 try {
-                  const weekId = await startSeason(
-                    leagueId,
-                    seasonValue,
-                    stakeValue,
-                    nextThursdaySixPm(),
-                  );
+                  const weekId = await startSeason(leagueId, seasonValue, stakeValue, deadlineRule);
                   onSeasonStarted(weekId);
                   toast.success(`${seasonValue} is open`, "Week 1 is ready for legs.");
                   setOpen(false);

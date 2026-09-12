@@ -8,6 +8,7 @@ import {
   EmptyState,
   Field,
   Input,
+  Select,
   SkeletonText,
 } from "../components/ui";
 import { SeasonControls } from "../components/admin/SeasonControls";
@@ -19,7 +20,8 @@ import { useAuth } from "../hooks/useAuth";
 import { useLeagueContext } from "../hooks/useLeagueContext";
 import { useLegs } from "../hooks/useLegs";
 import { useToast } from "../hooks/useToast";
-import { renameLeague, setDefaultStake } from "../lib/api";
+import { WEEKDAY_NAMES, describeDeadlineRule } from "../lib/dates";
+import { deadlineRuleOf, renameLeague, setDeadlineRule, setDefaultStake } from "../lib/api";
 
 /** Everything an admin does, on one page, in the order they tend to need it. */
 export default function Admin() {
@@ -41,6 +43,8 @@ export default function Admin() {
   const [name, setName] = useState("");
   const [stake, setStake] = useState("5");
   const [busy, setBusy] = useState<string | null>(null);
+  const [weekday, setWeekday] = useState("0");
+  const [lockTime, setLockTime] = useState("12:00");
 
   useEffect(() => {
     if (weeks.length === 0) {
@@ -54,10 +58,17 @@ export default function Admin() {
 
   const leagueName = league?.name;
   const leagueStake = league?.defaultStake;
+  const lockWeekday = league?.deadlineWeekday;
+  const lockHour = league?.deadlineHour;
+  const lockMinute = league?.deadlineMinute;
   useEffect(() => {
     if (leagueName !== undefined) setName(leagueName);
     if (leagueStake !== undefined) setStake(String(leagueStake));
-  }, [leagueName, leagueStake]);
+    if (lockWeekday !== undefined) setWeekday(String(lockWeekday));
+    if (lockHour !== undefined && lockMinute !== undefined) {
+      setLockTime(`${String(lockHour).padStart(2, "0")}:${String(lockMinute).padStart(2, "0")}`);
+    }
+  }, [leagueName, leagueStake, lockWeekday, lockHour, lockMinute]);
 
   const week = weeks.find((candidate) => candidate.id === selectedId) ?? null;
   const { legs } = useLegs(leagueId ?? undefined, week?.id);
@@ -112,6 +123,7 @@ export default function Admin() {
         weeks={weeks}
         seasons={seasons}
         defaultStake={league.defaultStake}
+        deadlineRule={deadlineRuleOf(league)}
         onSeasonStarted={setSelectedId}
       />
 
@@ -142,6 +154,7 @@ export default function Admin() {
               legs={legs}
               members={members}
               adminUid={user.uid}
+              deadlineRule={deadlineRuleOf(league)}
               onWeekChange={setSelectedId}
             />
           )}
@@ -168,6 +181,60 @@ export default function Admin() {
                       return;
                     }
                     void run("name", () => renameLeague(leagueId, name), "League renamed");
+                  }}
+                >
+                  Save
+                </Button>
+              </div>
+            )}
+          </Field>
+
+          <Field
+            label="Picks lock"
+            hint={`New weeks get this deadline. Currently ${describeDeadlineRule(deadlineRuleOf(league))}.`}
+          >
+            {(id) => (
+              <div className="flex flex-wrap gap-2">
+                <Select
+                  id={id}
+                  value={weekday}
+                  onChange={(event) => setWeekday(event.target.value)}
+                  className="!w-auto"
+                >
+                  {WEEKDAY_NAMES.map((label, index) => (
+                    <option key={label} value={index}>
+                      {label}
+                    </option>
+                  ))}
+                </Select>
+                <Input
+                  type="time"
+                  value={lockTime}
+                  onChange={(event) => setLockTime(event.target.value)}
+                  aria-label="Lock time"
+                  className="!w-auto"
+                />
+                <Button
+                  loading={busy === "lock"}
+                  onClick={() => {
+                    const [hour, minute] = lockTime.split(":").map(Number);
+                    if (!Number.isInteger(hour) || !Number.isInteger(minute)) {
+                      toast.error("Check the time", "Pick a time of day.");
+                      return;
+                    }
+                    void run(
+                      "lock",
+                      () =>
+                        setDeadlineRule(leagueId, {
+                          weekday: Number(weekday),
+                          hour: hour!,
+                          minute: minute!,
+                          // Anchored to Eastern so the lock tracks kickoff, not
+                          // whoever happens to be creating the week.
+                          timeZone: league!.deadlineTimeZone,
+                        }),
+                      "Lock time saved",
+                    );
                   }}
                 >
                   Save

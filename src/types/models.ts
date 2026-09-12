@@ -25,6 +25,12 @@ export interface League {
   memberUids: string[];
   /** Stake applied to newly created weeks. */
   defaultStake: number;
+  /** When picks lock each week. Applied to newly created weeks. */
+  deadlineWeekday: number;
+  deadlineHour: number;
+  deadlineMinute: number;
+  /** IANA zone the deadline is anchored to, so it never drifts with DST. */
+  deadlineTimeZone: string;
   createdAt: Date | null;
   updatedAt: Date | null;
 }

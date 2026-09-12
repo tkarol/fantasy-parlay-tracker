@@ -9,7 +9,12 @@ import {
   reopenWeek,
   updateWeek,
 } from "../../lib/api";
-import { nextThursdaySixPm, toDateTimeLocalValue } from "../../lib/dates";
+import {
+  describeDeadlineRule,
+  nextDeadline,
+  toDateTimeLocalValue,
+  type DeadlineRule,
+} from "../../lib/dates";
 import { parseAmerican } from "../../lib/odds";
 import type { Leg, Member, Week } from "../../types/models";
 
@@ -20,6 +25,7 @@ export function AdminWeekControls({
   legs,
   members,
   adminUid,
+  deadlineRule,
   onWeekChange,
 }: {
   leagueId: string;
@@ -28,6 +34,7 @@ export function AdminWeekControls({
   legs: Leg[];
   members: Member[];
   adminUid: string;
+  deadlineRule: DeadlineRule;
   onWeekChange: (weekId: string) => void;
 }) {
   const toast = useToast();
@@ -36,6 +43,20 @@ export function AdminWeekControls({
   const [payout, setPayout] = useState(week.payoutOverride === null ? "" : String(week.payoutOverride));
   const [busy, setBusy] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const deadlinePreview = (() => {
+    const ms = Date.parse(deadline);
+    if (!Number.isFinite(ms)) return null;
+    return new Intl.DateTimeFormat(undefined, {
+      timeZone: deadlineRule.timeZone,
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZoneName: "short",
+    }).format(new Date(ms));
+  })();
   const [addLegOpen, setAddLegOpen] = useState(false);
   const [newWeekOpen, setNewWeekOpen] = useState(false);
 
@@ -91,7 +112,16 @@ export function AdminWeekControls({
           )}
         </Field>
 
-        <Field label="Deadline" hint="Submissions lock at this time.">
+        <Field
+          label="Deadline"
+          hint={
+            // The input reads in the browser's zone; show what that instant is
+            // in the league's, so a travelling admin cannot set it an hour out.
+            deadlinePreview
+              ? `Locks ${deadlinePreview}`
+              : "Submissions lock at this time."
+          }
+        >
           {(id) => (
             <div className="flex gap-2">
               <Input
@@ -127,16 +157,16 @@ export function AdminWeekControls({
         <Button
           size="sm"
           variant="ghost"
-          loading={busy === "thursday"}
+          loading={busy === "rule"}
           onClick={() =>
             void run(
-              "thursday",
-              () => updateWeek(leagueId, week.id, { deadline: nextThursdaySixPm() }),
-              "Deadline set to Thursday 6pm",
+              "rule",
+              () => updateWeek(leagueId, week.id, { deadline: nextDeadline(deadlineRule) }),
+              `Deadline set to the league's usual lock`,
             )
           }
         >
-          Set next Thursday 6pm
+          Use {describeDeadlineRule(deadlineRule)}
         </Button>
         <Button size="sm" variant="ghost" onClick={() => setAddLegOpen(true)}>
           Add a leg for someone
@@ -211,6 +241,7 @@ export function AdminWeekControls({
                     leagueId,
                     week,
                     weeks.map((w) => w.id),
+                    deadlineRule,
                   );
                   onWeekChange(nextId);
                 },
@@ -263,6 +294,7 @@ export function AdminWeekControls({
         leagueId={leagueId}
         weeks={weeks}
         defaultStake={week.stake}
+        deadlineRule={deadlineRule}
         onCreated={onWeekChange}
       />
     </div>
@@ -391,6 +423,7 @@ function CreateWeekDialog({
   leagueId,
   weeks,
   defaultStake,
+  deadlineRule,
   onCreated,
 }: {
   open: boolean;
@@ -398,6 +431,7 @@ function CreateWeekDialog({
   leagueId: string;
   weeks: Week[];
   defaultStake: number;
+  deadlineRule: DeadlineRule;
   onCreated: (weekId: string) => void;
 }) {
   const toast = useToast();
@@ -436,6 +470,7 @@ function CreateWeekDialog({
         season: seasonValue,
         week: weekValue,
         stake: Number.isFinite(stakeValue) ? stakeValue : defaultStake,
+        rule: deadlineRule,
       });
       onCreated(id);
       toast.success(`Week ${weekValue} created`);

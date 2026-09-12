@@ -5,7 +5,7 @@ import type {
   SnapshotOptions,
   WithFieldValue,
 } from "firebase/firestore";
-import { toDate } from "./dates";
+import { DEFAULT_DEADLINE_RULE, toDate } from "./dates";
 import { parseAmerican } from "./odds";
 import { parseWeekId } from "./rand";
 import {
@@ -78,6 +78,12 @@ export const leagueConverter: FirestoreDataConverter<League, DocumentData> = {
       inviteCode: str(d.inviteCode),
       memberUids: strArray(d.memberUids),
       defaultStake: num(d.defaultStake, 5),
+      // Leagues from before the deadline was configurable fall back to the
+      // default rather than to whatever constant the code used at the time.
+      deadlineWeekday: num(d.deadlineWeekday, DEFAULT_DEADLINE_RULE.weekday),
+      deadlineHour: num(d.deadlineHour, DEFAULT_DEADLINE_RULE.hour),
+      deadlineMinute: num(d.deadlineMinute, DEFAULT_DEADLINE_RULE.minute),
+      deadlineTimeZone: str(d.deadlineTimeZone) || DEFAULT_DEADLINE_RULE.timeZone,
       createdAt: toDate(d.createdAt),
       updatedAt: toDate(d.updatedAt),
     };

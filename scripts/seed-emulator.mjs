@@ -164,10 +164,11 @@ async function main() {
     });
   }
 
-  // Week 1 of each season locks in early September; each week is seven days on.
+  // Picks lock Sunday noon Eastern, just before the 1pm kickoffs. September is
+  // EDT (UTC-4), so noon Eastern is 16:00 UTC.
   const seasonStart = {
-    2025: Date.UTC(2025, 8, 4, 22, 0, 0),
-    2026: Date.UTC(2026, 8, 3, 22, 0, 0),
+    2025: Date.UTC(2025, 8, 7, 16, 0, 0),
+    2026: Date.UTC(2026, 8, 13, 16, 0, 0),
   };
 
   for (const { season, stake, weeks } of SEASONS) {

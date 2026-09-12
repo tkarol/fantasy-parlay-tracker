@@ -44,6 +44,18 @@ offers each season plus **All time**, and compares the current season against
 the previous one: profit, ROI, tickets hit, weeks played, and each member's hit
 rate against their own last season.
 
+### When picks lock
+
+Each week has its own deadline, and new weeks get it from a league-wide rule —
+by default **Sundays at 12:00 PM Eastern**, just before the 1pm kickoffs.
+Change it under *Admin → League → Picks lock*.
+
+The rule is anchored to a named time zone rather than to whoever creates the
+week, which matters twice over: an admin on a trip does not move the league's
+deadline, and the season crosses the end of daylight saving — noon Eastern is
+16:00 UTC in September but 17:00 UTC in December, so the offset is resolved per
+date instead of assumed.
+
 ### Settlement rules
 
 Legs settle the way a sportsbook settles them:

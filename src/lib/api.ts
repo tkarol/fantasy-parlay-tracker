@@ -30,8 +30,8 @@ import {
 } from "./firestorePaths";
 import { leagueConverter } from "./converters";
 import { makeInviteCode, makeLeagueId, weekId as makeWeekId } from "./rand";
-import { nextThursdaySixPm } from "./dates";
-import type { LegResult, Member, MemberRole, ReactionEmoji, Week } from "../types/models";
+import { DEFAULT_DEADLINE_RULE, nextDeadline, type DeadlineRule } from "./dates";
+import type { League, LegResult, Member, MemberRole, ReactionEmoji, Week } from "../types/models";
 
 /**
  * Every Firestore write in the app lives here.
@@ -40,6 +40,17 @@ import type { LegResult, Member, MemberRole, ReactionEmoji, Week } from "../type
  * counterpart in the client, and a change to the document shape has one place
  * to be made rather than a dozen inline `setDoc` calls across components.
  */
+
+/** The league's lock rule, in the shape the date helpers want. */
+export function deadlineRuleOf(league: Pick<League, "deadlineWeekday" | "deadlineHour" | "deadlineMinute" | "deadlineTimeZone"> | null | undefined): DeadlineRule {
+  if (!league) return DEFAULT_DEADLINE_RULE;
+  return {
+    weekday: league.deadlineWeekday,
+    hour: league.deadlineHour,
+    minute: league.deadlineMinute,
+    timeZone: league.deadlineTimeZone,
+  };
+}
 
 export function displayNameFor(user: User): string {
   return user.displayName || user.email?.split("@")[0] || "Member";
@@ -71,6 +82,10 @@ export async function createLeague(user: User, options: CreateLeagueOptions): Pr
     inviteCode: code,
     memberUids: [user.uid],
     defaultStake: stake,
+    deadlineWeekday: DEFAULT_DEADLINE_RULE.weekday,
+    deadlineHour: DEFAULT_DEADLINE_RULE.hour,
+    deadlineMinute: DEFAULT_DEADLINE_RULE.minute,
+    deadlineTimeZone: DEFAULT_DEADLINE_RULE.timeZone,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
@@ -95,7 +110,7 @@ export async function createLeague(user: User, options: CreateLeagueOptions): Pr
     season,
     week: 1,
     stake,
-    deadline: nextThursdaySixPm(),
+    deadline: nextDeadline(),
     closed: false,
     createdAt: serverTimestamp(),
   });
@@ -109,6 +124,16 @@ export async function renameLeague(leagueId: string, name: string): Promise<void
 
 export async function setDefaultStake(leagueId: string, stake: number): Promise<void> {
   await updateDoc(leagueDoc(leagueId), { defaultStake: stake, updatedAt: serverTimestamp() });
+}
+
+export async function setDeadlineRule(leagueId: string, rule: DeadlineRule): Promise<void> {
+  await updateDoc(leagueDoc(leagueId), {
+    deadlineWeekday: rule.weekday,
+    deadlineHour: rule.hour,
+    deadlineMinute: rule.minute,
+    deadlineTimeZone: rule.timeZone,
+    updatedAt: serverTimestamp(),
+  });
 }
 
 /** Issue a new invite code and retire the old one. */
@@ -303,11 +328,13 @@ export interface CreateWeekOptions {
   week: number;
   stake: number;
   deadline?: Date | null;
+  /** Used when no explicit deadline is given. */
+  rule?: DeadlineRule;
 }
 
 export async function createWeek(
   leagueId: string,
-  { season, week, stake, deadline }: CreateWeekOptions,
+  { season, week, stake, deadline, rule }: CreateWeekOptions,
 ): Promise<string> {
   const id = makeWeekId(season, week);
   await setDoc(
@@ -316,7 +343,7 @@ export async function createWeek(
       season,
       week,
       stake,
-      deadline: deadline ?? nextThursdaySixPm(),
+      deadline: deadline ?? nextDeadline(rule),
       closed: false,
       createdAt: serverTimestamp(),
     },
@@ -336,9 +363,9 @@ export async function startSeason(
   leagueId: string,
   season: number,
   stake: number,
-  deadline?: Date | null,
+  rule?: DeadlineRule,
 ): Promise<string> {
-  return createWeek(leagueId, { season, week: 1, stake, deadline: deadline ?? null });
+  return createWeek(leagueId, { season, week: 1, stake, rule });
 }
 
 export type WeekPatch = Partial<
@@ -373,6 +400,7 @@ export async function closeWeekAndOpenNext(
   leagueId: string,
   week: Week,
   existingWeekIds: readonly string[],
+  rule?: DeadlineRule,
 ): Promise<string> {
   await updateWeek(leagueId, week.id, { closed: true });
 
@@ -383,7 +411,7 @@ export async function closeWeekAndOpenNext(
       season: week.season,
       week: nextWeekNumber,
       stake: week.stake,
-      deadline: nextThursdaySixPm(),
+      rule,
     });
   }
   return nextId;

@@ -16,24 +16,156 @@ export function toDate(value: DateLike): Date | null {
 }
 
 /**
- * The next occurrence of a given weekday and time, local to the viewer.
- * Defaults to Thursday 6pm — NFL kickoff, the league's usual lock.
+ * When picks lock.
+ *
+ * Anchored to a named time zone rather than the viewer's, because an NFL
+ * deadline belongs to the games, not to whoever happened to create the week.
+ * The season also runs across the end of daylight saving — noon Eastern is
+ * 16:00 UTC in September and 17:00 UTC in December — so the offset has to be
+ * resolved per date instead of assumed.
  */
-export function nextWeekday(
-  weekday = 4,
-  hour = 18,
-  minute = 0,
-  from: Date = new Date(),
-): Date {
-  const d = new Date(from);
-  const delta = (weekday - d.getDay() + 7) % 7 || 7;
-  d.setDate(d.getDate() + delta);
-  d.setHours(hour, minute, 0, 0);
-  return d;
+export interface DeadlineRule {
+  /** 0 = Sunday. */
+  weekday: number;
+  hour: number;
+  minute: number;
+  /** IANA zone, e.g. "America/New_York". */
+  timeZone: string;
 }
 
-export function nextThursdaySixPm(from: Date = new Date()): Date {
-  return nextWeekday(4, 18, 0, from);
+/** Noon Eastern on Sunday, just before the 1pm kickoffs. */
+export const DEFAULT_DEADLINE_RULE: DeadlineRule = {
+  weekday: 0,
+  hour: 12,
+  minute: 0,
+  timeZone: "America/New_York",
+};
+
+export const WEEKDAY_NAMES = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+] as const;
+
+const SHORT_WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/** How far the zone is from UTC at a given instant, in milliseconds. */
+function zoneOffsetMs(instant: number, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(new Date(instant));
+
+  const value = (type: Intl.DateTimeFormatPartTypes) =>
+    Number(parts.find((part) => part.type === type)?.value ?? "0");
+
+  // Some engines render midnight as hour 24.
+  const hour = value("hour") % 24;
+  const wallClock = Date.UTC(
+    value("year"),
+    value("month") - 1,
+    value("day"),
+    hour,
+    value("minute"),
+    value("second"),
+  );
+  return wallClock - instant;
+}
+
+/**
+ * The instant at which a given wall-clock time occurs in a zone.
+ *
+ * Resolved twice: the first offset is looked up using the wall time as if it
+ * were UTC, which lands on the wrong side of a DST change for times near the
+ * boundary. The second pass uses the corrected instant.
+ */
+export function zonedTimeToInstant(
+  year: number,
+  monthIndex: number,
+  day: number,
+  hour: number,
+  minute: number,
+  timeZone: string,
+): Date {
+  const wallClock = Date.UTC(year, monthIndex, day, hour, minute);
+  const firstPass = wallClock - zoneOffsetMs(wallClock, timeZone);
+  return new Date(wallClock - zoneOffsetMs(firstPass, timeZone));
+}
+
+/** The calendar date and weekday an instant falls on, in a given zone. */
+function zonedDateParts(instant: Date, timeZone: string) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    weekday: "short",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(instant);
+
+  const value = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+
+  return {
+    year: Number(value("year")),
+    monthIndex: Number(value("month")) - 1,
+    day: Number(value("day")),
+    weekday: Math.max(0, SHORT_WEEKDAYS.indexOf(value("weekday"))),
+  };
+}
+
+/** The next time the deadline comes round, strictly after `from`. */
+export function nextDeadline(
+  rule: DeadlineRule = DEFAULT_DEADLINE_RULE,
+  from: Date = new Date(),
+): Date {
+  const { year, monthIndex, day, weekday } = zonedDateParts(from, rule.timeZone);
+  const daysAhead = (rule.weekday - weekday + 7) % 7;
+
+  // Date.UTC normalises a day number past the end of the month.
+  const candidate = zonedTimeToInstant(
+    year,
+    monthIndex,
+    day + daysAhead,
+    rule.hour,
+    rule.minute,
+    rule.timeZone,
+  );
+  if (candidate.getTime() > from.getTime()) return candidate;
+
+  return zonedTimeToInstant(
+    year,
+    monthIndex,
+    day + daysAhead + 7,
+    rule.hour,
+    rule.minute,
+    rule.timeZone,
+  );
+}
+
+/** "Sundays at 12:00 PM ET" — how the rule reads in the admin panel. */
+export function describeDeadlineRule(rule: DeadlineRule, on: Date = new Date()): string {
+  const time = new Intl.DateTimeFormat(undefined, {
+    timeZone: rule.timeZone,
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(zonedTimeToInstant(2026, 0, 4, rule.hour, rule.minute, rule.timeZone));
+
+  const zone =
+    new Intl.DateTimeFormat("en-US", { timeZone: rule.timeZone, timeZoneName: "short" })
+      .formatToParts(on)
+      .find((part) => part.type === "timeZoneName")?.value ?? rule.timeZone;
+
+  return `${WEEKDAY_NAMES[rule.weekday] ?? "Sunday"}s at ${time} ${zone}`;
 }
 
 /** Value for an `<input type="datetime-local">`, which expects local time. */
