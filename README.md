@@ -232,6 +232,37 @@ if you want to push something without a commit.
 4. **Approve your members** under Admin. Anyone who signs in before you do this
    sees "Waiting on an admin".
 
+### Note on the sign-in domain
+
+`authDomain` is not taken from `.env` when the app is being served from one of
+the project's own Hosting domains — `src/lib/authDomain.ts` uses the domain
+already in the address bar instead.
+
+This is load-bearing, not tidiness. `signInWithRedirect` stashes its pending
+state in browser storage keyed to `authDomain` and reads it back after bouncing
+through Google. With the stock config the app is served from `.web.app` while
+`authDomain` is `.firebaseapp.com`, so that write and that read land in two
+different storage partitions on every browser that partitions third-party
+storage — Safari by default since 16.1, Chrome with third-party cookies off.
+Sign-in then dies with *"Unable to process request due to missing initial
+state."*
+
+iPhones hit it hardest, because they block pop-ups by default: the pop-up flow
+is refused, the code falls back to a redirect, and the redirect is the broken
+one. Both are factory settings, so it is close to every member rather than an
+edge case.
+
+Firebase Hosting serves `/__/auth/handler` on every domain in the project, so
+using the domain being viewed keeps the handshake first-party and leaves
+nothing to partition. `.env` still supplies the value for `localhost`.
+
+**If you add a custom domain**, it needs the same treatment: add it to the
+`hosted` list, to Firebase console → Authentication → Settings → Authorized
+domains, and to the OAuth client's authorized redirect URIs (Google Cloud
+console → APIs & Services → Credentials → the auto-created Web client) as
+`https://<domain>/__/auth/handler`. Missing that last one fails sign-in with
+`redirect_uri_mismatch`.
+
 ### Note on rules
 
 If the project was previously in test mode, this is the first deploy that

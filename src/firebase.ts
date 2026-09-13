@@ -7,6 +7,7 @@ import {
   setPersistence,
 } from "firebase/auth";
 import { connectFirestoreEmulator, getFirestore } from "firebase/firestore";
+import { resolveAuthDomain } from "./lib/authDomain";
 
 /**
  * Config comes from `.env` (see `.env.example`). These values are public
@@ -24,10 +25,20 @@ function requireEnv(key: keyof ImportMetaEnv): string {
   return value;
 }
 
+const projectId = requireEnv("VITE_FIREBASE_PROJECT_ID");
+
 const firebaseConfig: FirebaseOptions = {
   apiKey: requireEnv("VITE_FIREBASE_API_KEY"),
-  authDomain: requireEnv("VITE_FIREBASE_AUTH_DOMAIN"),
-  projectId: requireEnv("VITE_FIREBASE_PROJECT_ID"),
+  // Deliberately not the configured value when the app is being served from
+  // one of the project's own Hosting domains — see lib/authDomain.ts for why
+  // a cross-origin authDomain breaks sign-in outright on Safari and on Chrome
+  // with third-party cookies off.
+  authDomain: resolveAuthDomain(
+    typeof window === "undefined" ? "" : window.location.hostname,
+    projectId,
+    requireEnv("VITE_FIREBASE_AUTH_DOMAIN"),
+  ),
+  projectId,
   storageBucket: requireEnv("VITE_FIREBASE_STORAGE_BUCKET"),
   messagingSenderId: requireEnv("VITE_FIREBASE_MESSAGING_SENDER_ID"),
   appId: requireEnv("VITE_FIREBASE_APP_ID"),
