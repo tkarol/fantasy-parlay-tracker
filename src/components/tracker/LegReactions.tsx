@@ -3,7 +3,7 @@ import type { User } from "firebase/auth";
 import { clearReaction, setReaction } from "../../lib/api";
 import { useToast } from "../../hooks/useToast";
 import { REACTION_EMOJI, type Reaction, type ReactionEmoji } from "../../types/models";
-import { summarizeReactors } from "../../lib/reactionNames";
+import { shortNames } from "../../lib/reactionNames";
 import { cn } from "../../lib/cn";
 
 /**
@@ -12,9 +12,9 @@ import { cn } from "../../lib/cn";
  * Shows only the reactions a leg has, plus one button to add yours — a row of
  * five permanently-visible emoji on eight legs is noise.
  *
- * Each chip names who left it. "💀 2" tells you nothing about who is laughing
- * at you, and the names used to live in a `title` tooltip, which never appears
- * on the phones this actually gets read on.
+ * One chip per person, not per emoji. Nobody has more than one reaction on a
+ * leg, so a chip is simply someone and what they left — "💀 Cy", "🤡 Dave" —
+ * and answering "who roasted me" is reading, not parsing a grouped count.
  */
 export function LegReactions({
   leagueId,
@@ -36,12 +36,8 @@ export function LegReactions({
 
   const mine = user ? reactions.find((reaction) => reaction.uid === user.uid) : undefined;
 
-  const counts = new Map<ReactionEmoji, Reaction[]>();
-  for (const reaction of reactions) {
-    const bucket = counts.get(reaction.emoji);
-    if (bucket) bucket.push(reaction);
-    else counts.set(reaction.emoji, [reaction]);
-  }
+  // Shortened together, so two people sharing a first name stay tellable apart.
+  const labels = shortNames(reactions.map((reaction) => reaction.name));
 
   async function react(emoji: ReactionEmoji) {
     if (!user) return;
@@ -59,31 +55,46 @@ export function LegReactions({
 
   return (
     <div className="mt-1.5 flex flex-wrap items-center gap-1">
-      {[...counts.entries()].map(([emoji, list]) => {
-        const isMine = mine?.emoji === emoji;
-        const names = list.map((reaction) => reaction.name);
-        const full = names.join(", ");
-        return (
-          <button
-            key={emoji}
-            type="button"
-            disabled={!canReact}
-            onClick={() => void react(emoji)}
-            title={full}
-            aria-label={`${emoji} from ${full}`}
-            className={cn(
-              "inline-flex max-w-full items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition",
-              isMine
-                ? "border-ink/30 bg-surface-3 text-ink"
-                : "border-line text-ink-muted hover:bg-surface-3",
-              !canReact && "cursor-default",
-            )}
-          >
-            <span aria-hidden>{emoji}</span>
-            <span aria-hidden className="truncate">
-              {summarizeReactors(names)}
+      {reactions.map((reaction, index) => {
+        const isMine = mine?.uid === reaction.uid;
+        const label = labels[index] ?? reaction.name;
+        const content = (
+          <>
+            <span aria-hidden className="text-base leading-none">
+              {reaction.emoji}
             </span>
+            <span aria-hidden className="truncate font-medium">
+              {label}
+            </span>
+          </>
+        );
+        // Solid rather than outlined: on a white card an outline chip reads as
+        // chrome and the eye skips it, which is how this got missed before.
+        const shape =
+          "inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs";
+
+        // Only your own chip does anything — tapping someone else's would have
+        // nothing to change.
+        return isMine && canReact ? (
+          <button
+            key={reaction.uid}
+            type="button"
+            onClick={() => void react(reaction.emoji)}
+            title={`${reaction.name} — tap to remove yours`}
+            aria-label={`Your ${reaction.emoji} — remove it`}
+            className={cn(shape, "border-accent-line bg-accent-soft text-ink transition hover:bg-surface-3")}
+          >
+            {content}
           </button>
+        ) : (
+          <span
+            key={reaction.uid}
+            title={reaction.name}
+            aria-label={`${reaction.emoji} from ${reaction.name}`}
+            className={cn(shape, "border-line bg-surface-3 text-ink")}
+          >
+            {content}
+          </span>
         );
       })}
 

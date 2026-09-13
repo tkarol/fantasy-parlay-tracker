@@ -1,14 +1,11 @@
 /**
  * Who reacted, short enough to sit on a chip.
  *
- * A reaction is only worth anything if you can see who left it — "💀 2" tells
- * you nothing about who is laughing at you. Display names come from Google and
- * are usually "First Last", which is too long to repeat three times on one row,
- * so these shorten to first names and only reach for more when that would be
- * ambiguous.
+ * A reaction is only worth anything if you can see who left it. Display names
+ * come from Google and are usually "First Last", which is too long to sit on a
+ * chip beside an emoji, so these shorten to first names and only reach for more
+ * when that would be ambiguous.
  */
-
-const MAX_SHOWN = 3;
 
 /** "Ann Alvarez" -> "Ann". Leaves a single-word name alone. */
 function firstName(name: string): string {
@@ -42,11 +39,4 @@ export function shortNames(names: readonly string[]): string[] {
     // No surname to fall back on: the full name is the best available.
     return disambiguated === first ? name.trim() : disambiguated;
   });
-}
-
-/** The chip's label: "Ann, Dave" — or "Ann, Dave, Cy +2" once it runs long. */
-export function summarizeReactors(names: readonly string[], max = MAX_SHOWN): string {
-  const short = shortNames(names);
-  if (short.length <= max) return short.join(", ");
-  return `${short.slice(0, max).join(", ")} +${short.length - max}`;
 }
