@@ -3,6 +3,7 @@ import type { User } from "firebase/auth";
 import { clearReaction, setReaction } from "../../lib/api";
 import { useToast } from "../../hooks/useToast";
 import { REACTION_EMOJI, type Reaction, type ReactionEmoji } from "../../types/models";
+import { summarizeReactors } from "../../lib/reactionNames";
 import { cn } from "../../lib/cn";
 
 /**
@@ -10,6 +11,10 @@ import { cn } from "../../lib/cn";
  *
  * Shows only the reactions a leg has, plus one button to add yours — a row of
  * five permanently-visible emoji on eight legs is noise.
+ *
+ * Each chip names who left it. "💀 2" tells you nothing about who is laughing
+ * at you, and the names used to live in a `title` tooltip, which never appears
+ * on the phones this actually gets read on.
  */
 export function LegReactions({
   leagueId,
@@ -56,15 +61,18 @@ export function LegReactions({
     <div className="mt-1.5 flex flex-wrap items-center gap-1">
       {[...counts.entries()].map(([emoji, list]) => {
         const isMine = mine?.emoji === emoji;
+        const names = list.map((reaction) => reaction.name);
+        const full = names.join(", ");
         return (
           <button
             key={emoji}
             type="button"
             disabled={!canReact}
             onClick={() => void react(emoji)}
-            title={list.map((reaction) => reaction.name).join(", ")}
+            title={full}
+            aria-label={`${emoji} from ${full}`}
             className={cn(
-              "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition",
+              "inline-flex max-w-full items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition",
               isMine
                 ? "border-ink/30 bg-surface-3 text-ink"
                 : "border-line text-ink-muted hover:bg-surface-3",
@@ -72,9 +80,8 @@ export function LegReactions({
             )}
           >
             <span aria-hidden>{emoji}</span>
-            <span className="tnum">{list.length}</span>
-            <span className="sr-only">
-              {emoji} from {list.map((reaction) => reaction.name).join(", ")}
+            <span aria-hidden className="truncate">
+              {summarizeReactors(names)}
             </span>
           </button>
         );
