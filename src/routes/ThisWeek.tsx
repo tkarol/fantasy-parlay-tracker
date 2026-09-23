@@ -22,13 +22,16 @@ import { SweatStatus } from "../components/tracker/SweatStatus";
 import { WeekAwards } from "../components/tracker/WeekAwards";
 import { GradeWeekDialog } from "../components/tracker/GradeWeekDialog";
 import { FillOddsDialog } from "../components/tracker/FillOddsDialog";
+import { SeasonGlance } from "../components/tracker/SeasonGlance";
 import { useAuth } from "../hooks/useAuth";
 import { useLeagueContext } from "../hooks/useLeagueContext";
-import { useLegs } from "../hooks/useLegs";
+import { useLegs, useLegsByWeek } from "../hooks/useLegs";
 import { useReactions } from "../hooks/useReactions";
 import { useNow } from "../hooks/useNow";
 import { describeFirestoreError } from "../hooks/firestoreState";
 import { isWeekOpen, settleWeek } from "../lib/parlay";
+import { buildTickets, summarizeSeason } from "../lib/stats";
+import { buildStandings } from "../lib/scoring";
 
 /**
  * The landing page. A member signing in should see this week's ticket and,
@@ -60,6 +63,31 @@ export default function ThisWeek() {
   const reactions = useReactions(leagueId ?? undefined, week?.id);
 
   const settlement = useMemo(() => (week ? settleWeek(week, legs) : null), [week, legs]);
+
+  /*
+   * The season summary at the foot of the page. Scoped to the season being
+   * viewed rather than every season on record: this is one listener per week,
+   * and a glance does not need last year.
+   */
+  const season = week?.season ?? null;
+  const seasonWeeks = useMemo(
+    () => (season === null ? [] : weeks.filter((candidate) => candidate.season === season)),
+    [weeks, season],
+  );
+  const seasonWeekIds = useMemo(() => seasonWeeks.map((w) => w.id), [seasonWeeks]);
+  const { legsByWeek, loading: seasonLegsLoading } = useLegsByWeek(
+    leagueId ?? undefined,
+    seasonWeekIds,
+  );
+  const seasonTickets = useMemo(
+    () => buildTickets(seasonWeeks, legsByWeek),
+    [seasonWeeks, legsByWeek],
+  );
+  const seasonSummary = useMemo(() => summarizeSeason(seasonTickets), [seasonTickets]);
+  const seasonStandings = useMemo(
+    () => buildStandings(seasonTickets, members),
+    [seasonTickets, members],
+  );
   const myLeg = useMemo(
     () => (user ? (legs.find((leg) => leg.uid === user.uid) ?? null) : null),
     [legs, user],
@@ -243,6 +271,16 @@ export default function ThisWeek() {
           </CardBody>
         </Card>
       </div>
+
+      {season !== null && (
+        <SeasonGlance
+          season={season}
+          summary={seasonSummary}
+          standings={seasonStandings}
+          currentUid={user?.uid ?? null}
+          loading={seasonLegsLoading}
+        />
+      )}
 
       {isAdmin && (
         <FillOddsDialog
