@@ -91,11 +91,21 @@ export function SeasonGlance({
             </h3>
             {/* Capped: stretched across a desktop card the points end up an
                 inch from the name they belong to. */}
-            <ul className="max-w-lg space-y-1">
-              {standings.map((row) => (
-                <StandingLine key={row.key} row={row} isMine={row.uid === currentUid} />
-              ))}
-            </ul>
+            <div className="max-w-lg">
+              {/* Two numeric columns need naming; "3-1" beside "150" is
+                  otherwise anyone's guess. */}
+              <div className="flex items-center gap-2 px-2 pb-1 text-[11px] font-medium uppercase tracking-wider text-ink-faint">
+                <span className="w-5 shrink-0" />
+                <span className="min-w-0 flex-1" />
+                <span className="w-12 shrink-0 text-right">W–L</span>
+                <span className="w-12 shrink-0 text-right">Pts</span>
+              </div>
+              <ul className="space-y-1">
+                {standings.map((row) => (
+                  <StandingLine key={row.key} row={row} isMine={row.uid === currentUid} />
+                ))}
+              </ul>
+            </div>
           </div>
         )}
       </CardBody>
@@ -152,8 +162,13 @@ function StandingLine({ row, isMine }: { row: StandingsRow; isMine: boolean }) {
         {row.name}
         {isMine && <span className="ml-1 text-xs font-normal text-ink-muted">(you)</span>}
       </span>
-      <span className="shrink-0 tnum font-semibold text-ink">{row.points}</span>
-      <span className="shrink-0 text-xs text-ink-faint">pts</span>
+      <span
+        className="w-12 shrink-0 text-right tnum text-ink-muted"
+        title={`${row.wins} of ${row.legs} leg${row.legs === 1 ? "" : "s"} won`}
+      >
+        {row.wins}–{row.losses}
+      </span>
+      <span className="w-12 shrink-0 text-right tnum font-semibold text-ink">{row.points}</span>
     </li>
   );
 }
