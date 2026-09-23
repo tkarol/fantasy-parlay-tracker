@@ -23,6 +23,7 @@ import { WeekAwards } from "../components/tracker/WeekAwards";
 import { GradeWeekDialog } from "../components/tracker/GradeWeekDialog";
 import { FillOddsDialog } from "../components/tracker/FillOddsDialog";
 import { SeasonGlance } from "../components/tracker/SeasonGlance";
+import { ReactionNudge } from "../components/tracker/ReactionNudge";
 import { useAuth } from "../hooks/useAuth";
 import { useLeagueContext } from "../hooks/useLeagueContext";
 import { useLegs, useLegsByWeek } from "../hooks/useLegs";
@@ -246,17 +247,25 @@ export default function ThisWeek() {
               ) : legsLoading ? (
                 <SkeletonText lines={4} />
               ) : (
-                <LegList
-                  leagueId={leagueId}
-                  week={week}
-                  legs={legs}
-                  isAdmin={isAdmin}
-                  adminUid={user?.uid ?? ""}
-                  currentUid={user?.uid ?? null}
-                  user={user}
-                  reactions={reactions}
-                  canReact={isMember}
-                />
+                <>
+                  <ReactionNudge
+                    legs={legs}
+                    reactions={reactions}
+                    currentUid={user?.uid ?? null}
+                    enabled={isMember && isLatestWeek}
+                  />
+                  <LegList
+                    leagueId={leagueId}
+                    week={week}
+                    legs={legs}
+                    isAdmin={isAdmin}
+                    adminUid={user?.uid ?? ""}
+                    currentUid={user?.uid ?? null}
+                    user={user}
+                    reactions={reactions}
+                    canReact={isMember}
+                  />
+                </>
               )}
             </CardBody>
           </Card>

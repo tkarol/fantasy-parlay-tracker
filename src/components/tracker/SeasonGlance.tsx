@@ -8,10 +8,10 @@ import { cn } from "../../lib/cn";
 /**
  * The season in one glance, at the foot of the week page.
  *
- * Deliberately not a second stats page: three headline numbers and the top of
- * the table, because the question someone has after looking at this week's
- * ticket is "how are we doing, and where am I" — not one the full page should
- * have to be opened to answer.
+ * Deliberately not a second stats page: three headline numbers and the table,
+ * because the question someone has after looking at this week's ticket is "how
+ * are we doing, and where am I" — not one the full page should have to be
+ * opened to answer.
  */
 export function SeasonGlance({
   season,
@@ -43,11 +43,6 @@ export function SeasonGlance({
   if (summary.weeksSettled === 0) return null;
 
   const decided = summary.ticketsWon + summary.ticketsLost;
-  const top = standings.slice(0, 3);
-  const mine = currentUid ? standings.find((row) => row.uid === currentUid) : undefined;
-  // Your own row is the point of a standings table; only repeat it when the
-  // top three did not already include it.
-  const alsoShowMine = mine && !top.some((row) => row.key === mine.key) ? mine : null;
 
   return (
     <Card>
@@ -97,17 +92,9 @@ export function SeasonGlance({
             {/* Capped: stretched across a desktop card the points end up an
                 inch from the name they belong to. */}
             <ul className="max-w-lg space-y-1">
-              {top.map((row) => (
+              {standings.map((row) => (
                 <StandingLine key={row.key} row={row} isMine={row.uid === currentUid} />
               ))}
-              {alsoShowMine && (
-                <>
-                  <li aria-hidden className="py-0.5 text-center text-xs text-ink-faint">
-                    ⋯
-                  </li>
-                  <StandingLine row={alsoShowMine} isMine />
-                </>
-              )}
             </ul>
           </div>
         )}
