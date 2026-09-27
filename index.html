@@ -34,6 +34,35 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // Self-heal a stale page.
+      //
+      // A browser holding an old index.html asks for asset filenames that the
+      // latest deploy no longer has. Hosting's SPA rewrite answers those with
+      // index.html itself, so the module fails its MIME check, never runs, and
+      // the page is blank forever — which is how this looked on a phone while
+      // a desktop that happened to revalidate was fine.
+      //
+      // Caching is fixed above this, but a client already holding the stale
+      // copy cannot benefit from that until it fetches the page again. So:
+      // reload once, and only once, so a genuinely broken script cannot put
+      // the page in a loop.
+      window.addEventListener(
+        "error",
+        function (event) {
+          var el = event.target;
+          if (!el || el.tagName !== "SCRIPT" || !el.src) return;
+          try {
+            if (sessionStorage.getItem("stale-asset-reload")) return;
+            sessionStorage.setItem("stale-asset-reload", "1");
+          } catch (e) {
+            return; // storage blocked; a reload loop would be worse than a blank page
+          }
+          window.location.reload();
+        },
+        true,
+      );
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
