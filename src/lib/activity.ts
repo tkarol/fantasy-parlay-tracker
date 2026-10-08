@@ -16,7 +16,11 @@ export interface ActivityItem {
   season: number;
   week: number;
   who: string;
-  at: Date;
+  /**
+   * Null for a reaction left before reactions were timestamped. Those are
+   * older than anything dated, so they sort last and read as "earlier".
+   */
+  at: Date | null;
   /** Set on a comment. */
   text?: string;
   /** Set on a reaction. */
@@ -37,15 +41,24 @@ export interface DigestInput {
   myUid: string;
   /** Only things after this count as new. */
   since: Date;
+  /**
+   * Include items with no timestamp.
+   *
+   * Only ever true on a first run. Every reaction left before they were
+   * stamped has no date, so excluding them is right for a "since you last
+   * looked" digest and wrong for a "here is what you missed" one — without
+   * this, a league that has been reacting for months opens to an empty card.
+   */
+  includeUndated?: boolean;
 }
 
 /**
  * Newest first, and only what this member has not already been shown.
  *
  * Your own comments and reactions are filtered out — being told you reacted to
- * yourself is noise — as is anything with no timestamp, which is how reactions
- * written before they were stamped stay quietly in the past instead of
- * resurfacing as brand new.
+ * yourself is noise. Undated items are dropped too unless `includeUndated`
+ * says otherwise, which keeps pre-timestamp reactions out of a routine digest
+ * while still letting a first run show them.
  */
 export function buildDigest({
   weeks,
@@ -53,13 +66,17 @@ export function buildDigest({
   reactionsByWeek,
   myUid,
   since,
+  includeUndated = false,
 }: DigestInput): ActivityItem[] {
   if (!myUid) return [];
   const items: ActivityItem[] = [];
 
   for (const week of weeks) {
-    const isNews = (legId: string, authorUid: string, at: Date | null): at is Date =>
-      legId === myUid && authorUid !== myUid && at !== null && at.getTime() > since.getTime();
+    const isNews = (legId: string, authorUid: string, at: Date | null): boolean => {
+      if (legId !== myUid || authorUid === myUid) return false;
+      if (at === null) return includeUndated;
+      return at.getTime() > since.getTime();
+    };
 
     for (const comment of commentsByWeek[week.id] ?? []) {
       if (!isNews(comment.legId, comment.uid, comment.createdAt)) continue;
@@ -91,7 +108,12 @@ export function buildDigest({
     }
   }
 
-  return items.sort((a, b) => b.at.getTime() - a.at.getTime());
+  // Newest first, with the undated — which are the oldest there are — last.
+  return items.sort((a, b) => {
+    if (a.at === null) return b.at === null ? 0 : 1;
+    if (b.at === null) return -1;
+    return b.at.getTime() - a.at.getTime();
+  });
 }
 
 /** "3 comments and 2 reactions" — the digest's own headline. */

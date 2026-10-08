@@ -73,7 +73,7 @@ describe("buildDigest", () => {
       [comment({ id: "old", createdAt: after(1) }), comment({ id: "new", createdAt: after(30) })],
       [reaction({ createdAt: after(10) })],
     );
-    expect(items.map((i) => i.at.getTime())).toEqual([
+    expect(items.map((i) => i.at?.getTime())).toEqual([
       after(30).getTime(),
       after(10).getTime(),
       after(1).getTime(),
@@ -124,7 +124,7 @@ describe("the first run, reaching back from the epoch", () => {
     expect(items).toHaveLength(2);
   });
 
-  it("still drops the untimestamped ones", () => {
+  it("drops the untimestamped ones unless asked for them", () => {
     expect(fromEpoch([], [reaction({ createdAt: null })])).toEqual([]);
   });
 
@@ -132,6 +132,54 @@ describe("the first run, reaching back from the epoch", () => {
     expect(
       fromEpoch([comment({ legId: THEM }), comment({ id: "mine", uid: ME })], []),
     ).toEqual([]);
+  });
+});
+
+/*
+ * The rollout case. Every reaction left before this feature shipped carries no
+ * timestamp, so a league that has been reacting for months would otherwise
+ * open to an empty card — which is exactly how it behaved on the first deploy.
+ */
+describe("a first run including undated reactions", () => {
+  const firstRun = (comments: Comment[], reactions: Reaction[]) =>
+    buildDigest({
+      weeks: WEEKS,
+      commentsByWeek: { "2026-3": comments },
+      reactionsByWeek: { "2026-3": reactions },
+      myUid: ME,
+      since: new Date(0),
+      includeUndated: true,
+    });
+
+  it("shows a reaction that has no timestamp at all", () => {
+    const items = firstRun([], [reaction({ createdAt: null })]);
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ kind: "reaction", emoji: "💀", at: null });
+  });
+
+  it("still refuses one on someone else's leg, or my own doing", () => {
+    expect(firstRun([], [reaction({ createdAt: null, legId: THEM })])).toEqual([]);
+    expect(firstRun([], [reaction({ createdAt: null, uid: ME })])).toEqual([]);
+  });
+
+  it("sorts the undated last, behind everything with a date", () => {
+    const items = firstRun(
+      [comment({ id: "dated", createdAt: after(5) })],
+      [reaction({ createdAt: null })],
+    );
+    expect(items.map((i) => i.kind)).toEqual(["comment", "reaction"]);
+    expect(items[1]!.at).toBeNull();
+  });
+
+  it("keeps two undated items in a stable order rather than throwing", () => {
+    const items = firstRun(
+      [],
+      [
+        reaction({ createdAt: null, uid: "a", name: "A" }),
+        reaction({ createdAt: null, uid: "b", name: "B" }),
+      ],
+    );
+    expect(items.map((i) => i.who)).toEqual(["A", "B"]);
   });
 });
 

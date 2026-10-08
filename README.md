@@ -118,10 +118,16 @@ after a deploy that introduces this — gets **Here's what you missed** instead,
 reaching back across the same window. Starting their clock silently would mean
 the feature launched by telling the whole league nothing.
 
-Two details keep that honest. The window is still only the two most recent
-weeks, and a reaction with no timestamp (written before they were stamped)
-stays in the past rather than resurfacing as brand new, so a first run surfaces
-real activity rather than replaying the archive. The mark is written when the
+A first run also counts reactions that carry no timestamp. Reactions were only
+stamped from the release that added this, so every one already on a league has
+no date — dropping them is right for "since you last looked" and wrong for
+"here is what you missed", and without the distinction the feature ships to a
+league that has been reacting for months and shows every one of them nothing.
+Undated items sort last and read as *earlier*. Routine digests after that still
+ignore them.
+
+The window is still only the two most recent weeks, so a first run is a
+catch-up rather than a replay of the archive. The mark is written when the
 card is dismissed, not when it is shown, so closing the tab mid-read does not
 lose the news; a first run with nothing to report writes it anyway, so the
 backlog scan does not repeat forever. Each query reads only rows whose `legId`

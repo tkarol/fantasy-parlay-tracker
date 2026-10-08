@@ -65,7 +65,7 @@ export function ActivityDigest() {
             <div className="flex flex-wrap items-baseline gap-x-2">
               <span className="font-semibold text-ink">{item.who}</span>
               <span className="text-xs text-ink-faint">
-                week {item.week} · {formatRelative(item.at, now)}
+                week {item.week} · {item.at ? formatRelative(item.at, now) : "earlier"}
               </span>
             </div>
             {item.kind === "comment" ? (

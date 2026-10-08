@@ -98,6 +98,10 @@ export function useActivityDigest(
           reactionsByWeek,
           myUid: uid,
           since,
+          // A first run is a catch-up, so it counts reactions left before they
+          // carried a timestamp. Every one on the league predates this feature,
+          // and dropping them is what made the first deploy land silently.
+          includeUndated: lastSeen === null,
         });
         setItems(digest);
 
