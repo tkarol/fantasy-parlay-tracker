@@ -25,6 +25,7 @@ export function useActivityDigest(
   uid: string | undefined,
 ) {
   const [items, setItems] = useState<ActivityItem[]>([]);
+  const [firstRun, setFirstRun] = useState(false);
   // The scan runs once per sign-in; `weeks` arrives empty and then fills, and
   // re-running on every change would re-show a digest already dismissed.
   const ranFor = useRef<string | null>(null);
@@ -44,12 +45,19 @@ export function useActivityDigest(
       try {
         const lastSeen = await getLastSeenActivity(leagueId, uid);
 
-        // Never seen before: start the clock now rather than opening with a
-        // season's worth of history the moment someone joins.
-        if (lastSeen === null) {
-          await markActivitySeen(leagueId, uid);
-          return;
-        }
+        /*
+         * No mark yet — which is everyone the first time they open the app
+         * after this ships. Show the backlog rather than starting the clock
+         * silently, or the feature would launch by telling the whole league
+         * nothing.
+         *
+         * Safe to reach back: the window is still only the last couple of
+         * weeks, and anything written before reactions carried a timestamp is
+         * dropped for having none, so this surfaces real activity rather than
+         * replaying the archive.
+         */
+        const since = lastSeen ?? new Date(0);
+        if (!cancelled) setFirstRun(lastSeen === null);
 
         const commentsByWeek: Record<string, Comment[]> = {};
         const reactionsByWeek: Record<string, Reaction[]> = {};
@@ -84,9 +92,21 @@ export function useActivityDigest(
         );
 
         if (cancelled) return;
-        setItems(
-          buildDigest({ weeks: scope, commentsByWeek, reactionsByWeek, myUid: uid, since: lastSeen }),
-        );
+        const digest = buildDigest({
+          weeks: scope,
+          commentsByWeek,
+          reactionsByWeek,
+          myUid: uid,
+          since,
+        });
+        setItems(digest);
+
+        // A first run with nothing to report still starts the clock, so the
+        // backlog scan does not repeat on every sign-in forever.
+        if (lastSeen === null && digest.length === 0) {
+          await markActivitySeen(leagueId, uid);
+          if (!cancelled) setFirstRun(false);
+        }
       } catch {
         // A digest is a nicety; a league that cannot read it still works.
         if (!cancelled) setItems([]);
@@ -98,10 +118,16 @@ export function useActivityDigest(
     };
   }, [leagueId, uid, scopeKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /*
+   * The mark is written on dismissal, not on arrival. Someone who closes the
+   * tab mid-read gets the same catch-up next time instead of losing it to a
+   * page they never looked at.
+   */
   const dismiss = useCallback(() => {
     setItems([]);
+    setFirstRun(false);
     if (leagueId && uid) void markActivitySeen(leagueId, uid);
   }, [leagueId, uid]);
 
-  return { items, dismiss };
+  return { items, firstRun, dismiss };
 }

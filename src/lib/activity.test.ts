@@ -104,6 +104,37 @@ describe("buildDigest", () => {
   });
 });
 
+// What a first sign-in after the feature ships has to do: show the real
+// backlog, without replaying reactions from before they carried a timestamp.
+describe("the first run, reaching back from the epoch", () => {
+  const fromEpoch = (comments: Comment[], reactions: Reaction[]) =>
+    buildDigest({
+      weeks: WEEKS,
+      commentsByWeek: { "2026-3": comments },
+      reactionsByWeek: { "2026-3": reactions },
+      myUid: ME,
+      since: new Date(0),
+    });
+
+  it("surfaces everything timestamped on my leg", () => {
+    const items = fromEpoch(
+      [comment({ createdAt: before(10_000) })],
+      [reaction({ createdAt: before(5_000) })],
+    );
+    expect(items).toHaveLength(2);
+  });
+
+  it("still drops the untimestamped ones", () => {
+    expect(fromEpoch([], [reaction({ createdAt: null })])).toEqual([]);
+  });
+
+  it("still ignores other people's legs and my own doing", () => {
+    expect(
+      fromEpoch([comment({ legId: THEM }), comment({ id: "mine", uid: ME })], []),
+    ).toEqual([]);
+  });
+});
+
 describe("describeDigest", () => {
   it("counts each kind, singular and plural", () => {
     expect(describeDigest(digest([comment()]))).toBe("1 comment");

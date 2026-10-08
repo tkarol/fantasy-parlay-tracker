@@ -6,6 +6,8 @@ import { useActivityDigest } from "../hooks/useActivityDigest";
 import { describeDigest } from "../lib/activity";
 import { formatRelative } from "../lib/dates";
 
+const MAX_SHOWN = 20;
+
 /**
  * "While you were away" — what people did to your leg since you last looked.
  *
@@ -14,12 +16,16 @@ import { formatRelative } from "../lib/dates";
  * This catches you on the way in, wherever you land.
  *
  * Dismissing moves the read mark to now, so each piece of news is shown once.
+ *
+ * Someone with no read mark — which is everyone the first time they open the
+ * app after this ships — gets the backlog instead of a silent clock-start, so
+ * the feature does not launch by telling the whole league nothing.
  */
 export function ActivityDigest() {
   const { user } = useAuth();
   const { leagueId, weeks, isMember } = useLeagueContext();
   const now = useNow();
-  const { items, dismiss } = useActivityDigest(
+  const { items, firstRun, dismiss } = useActivityDigest(
     isMember ? (leagueId ?? undefined) : undefined,
     weeks,
     user?.uid,
@@ -29,12 +35,15 @@ export function ActivityDigest() {
 
   const summary = describeDigest(items);
   const weekNumbers = [...new Set(items.map((item) => item.week))];
+  // The body scrolls, but a forty-item scroll is not something anyone reads.
+  const shown = items.slice(0, MAX_SHOWN);
+  const hidden = items.length - shown.length;
 
   return (
     <Modal
       open
       onClose={dismiss}
-      title="While you were away"
+      title={firstRun ? "Here's what you missed" : "While you were away"}
       description={
         <div>
           {summary} on your leg
@@ -48,7 +57,7 @@ export function ActivityDigest() {
       }
     >
       <ul className="space-y-2">
-        {items.map((item) => (
+        {shown.map((item) => (
           <li
             key={item.id}
             className="rounded-xl border border-line bg-surface-2 px-3 py-2"
@@ -70,6 +79,11 @@ export function ActivityDigest() {
           </li>
         ))}
       </ul>
+      {hidden > 0 && (
+        <p className="mt-2 text-center text-xs text-ink-faint">
+          and {hidden} more on your leg
+        </p>
+      )}
     </Modal>
   );
 }

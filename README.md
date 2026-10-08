@@ -113,11 +113,19 @@ can read or write — deliberately not a field on the member document, which
 only admins may write, so marking your own digest read never requires the
 rules to let you near your own `role`.
 
-Two details that keep it honest: someone signing in for the first time has
-their mark set to now rather than being handed a season of backlog, and a
-reaction with no timestamp (written before they were stamped) stays in the
-past instead of resurfacing as brand new. The scan covers the two most recent
-weeks and reads only rows whose `legId` is yours.
+Someone with no read mark — which is everyone the first time they open the app
+after a deploy that introduces this — gets **Here's what you missed** instead,
+reaching back across the same window. Starting their clock silently would mean
+the feature launched by telling the whole league nothing.
+
+Two details keep that honest. The window is still only the two most recent
+weeks, and a reaction with no timestamp (written before they were stamped)
+stays in the past rather than resurfacing as brand new, so a first run surfaces
+real activity rather than replaying the archive. The mark is written when the
+card is dismissed, not when it is shown, so closing the tab mid-read does not
+lose the news; a first run with nothing to report writes it anyway, so the
+backlog scan does not repeat forever. Each query reads only rows whose `legId`
+is yours.
 
 ### Settlement rules
 
