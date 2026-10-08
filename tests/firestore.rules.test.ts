@@ -5,7 +5,18 @@ import {
   initializeTestEnvironment,
   type RulesTestEnvironment,
 } from "@firebase/rules-unit-testing";
-import { doc, getDoc, setDoc, updateDoc, deleteDoc, deleteField, serverTimestamp } from "firebase/firestore";
+import {
+  addDoc,
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  deleteField,
+  serverTimestamp,
+} from "firebase/firestore";
 import { afterAll, beforeAll, beforeEach, describe, it } from "vitest";
 
 /**
@@ -542,5 +553,128 @@ describe("reactions", () => {
     });
     await assertFails(deleteDoc(doc(as(MEMBER), ...path(MEMBER, OTHER))));
     await assertSucceeds(deleteDoc(doc(as(OTHER), ...path(MEMBER, OTHER))));
+  });
+});
+
+const commentPath = (week: string) => ["leagues", LEAGUE, "weeks", week, "comments"] as const;
+const aComment = (uid: string, legId: string, text = "Terrible pick") => ({
+  legId,
+  uid,
+  name: "Someone",
+  text,
+  createdAt: serverTimestamp(),
+});
+
+describe("comments", () => {
+  it("lets a member comment on someone else's leg", async () => {
+    await assertSucceeds(
+      addDoc(collection(as(OTHER), ...commentPath(OPEN_WEEK)), aComment(OTHER, MEMBER)),
+    );
+  });
+
+  // The whole point: the argument happens after the games.
+  it("can still be left on a closed week", async () => {
+    await assertSucceeds(
+      addDoc(collection(as(OTHER), ...commentPath(CLOSED_WEEK)), aComment(OTHER, MEMBER)),
+    );
+  });
+
+  it("cannot be posted under someone else's name", async () => {
+    await assertFails(
+      addDoc(collection(as(OTHER), ...commentPath(OPEN_WEEK)), aComment(MEMBER, MEMBER)),
+    );
+  });
+
+  it("denies a non-member posting", async () => {
+    await assertFails(
+      addDoc(collection(as(OUTSIDER), ...commentPath(OPEN_WEEK)), aComment(OUTSIDER, MEMBER)),
+    );
+  });
+
+  it("denies a non-member reading", async () => {
+    await assertFails(getDocs(collection(as(OUTSIDER), ...commentPath(OPEN_WEEK))));
+  });
+
+  it("rejects an empty comment", async () => {
+    await assertFails(
+      addDoc(collection(as(OTHER), ...commentPath(OPEN_WEEK)), aComment(OTHER, MEMBER, "")),
+    );
+  });
+
+  it("rejects a comment past the length cap", async () => {
+    await assertFails(
+      addDoc(
+        collection(as(OTHER), ...commentPath(OPEN_WEEK)),
+        aComment(OTHER, MEMBER, "x".repeat(501)),
+      ),
+    );
+  });
+
+  it("cannot be edited, even by its author", async () => {
+    let id = "";
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const ref = await addDoc(
+        collection(ctx.firestore(), ...commentPath(OPEN_WEEK)),
+        aComment(OTHER, MEMBER),
+      );
+      id = ref.id;
+    });
+    await assertFails(
+      updateDoc(doc(as(OTHER), ...commentPath(OPEN_WEEK), id), { text: "rewritten" }),
+    );
+  });
+
+  it("can be deleted by its author but not by a bystander", async () => {
+    let id = "";
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const ref = await addDoc(
+        collection(ctx.firestore(), ...commentPath(OPEN_WEEK)),
+        aComment(OTHER, MEMBER),
+      );
+      id = ref.id;
+    });
+    await assertFails(deleteDoc(doc(as(MEMBER), ...commentPath(OPEN_WEEK), id)));
+    await assertSucceeds(deleteDoc(doc(as(OTHER), ...commentPath(OPEN_WEEK), id)));
+  });
+
+  it("can be deleted by an admin", async () => {
+    let id = "";
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const ref = await addDoc(
+        collection(ctx.firestore(), ...commentPath(OPEN_WEEK)),
+        aComment(OTHER, MEMBER),
+      );
+      id = ref.id;
+    });
+    await assertSucceeds(deleteDoc(doc(as(ADMIN), ...commentPath(OPEN_WEEK), id)));
+  });
+});
+
+describe("the activity read marker", () => {
+  const seen = (ctx: string, uid: string) =>
+    doc(as(ctx), "leagues", LEAGUE, "seen", uid);
+
+  it("is writable and readable by its owner", async () => {
+    await assertSucceeds(setDoc(seen(MEMBER, MEMBER), { lastSeenAt: serverTimestamp() }));
+    await assertSucceeds(getDoc(seen(MEMBER, MEMBER)));
+  });
+
+  // It records what someone has read; nobody else's business.
+  it("is invisible to other members", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "leagues", LEAGUE, "seen", MEMBER), {
+        lastSeenAt: serverTimestamp(),
+      });
+    });
+    await assertFails(getDoc(seen(OTHER, MEMBER)));
+    await assertFails(setDoc(seen(OTHER, MEMBER), { lastSeenAt: serverTimestamp() }));
+  });
+
+  it("is not writable by an admin either", async () => {
+    await assertFails(setDoc(seen(ADMIN, MEMBER), { lastSeenAt: serverTimestamp() }));
+  });
+
+  it("denies a non-member entirely", async () => {
+    await assertFails(getDoc(seen(OUTSIDER, OUTSIDER)));
   });
 });

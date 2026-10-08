@@ -15,6 +15,7 @@ import {
   type League,
   type Leg,
   type LegResult,
+  type Comment,
   type Member,
   type MemberRole,
   type TicketImage,
@@ -224,6 +225,21 @@ export const inviteCodeConverter: FirestoreDataConverter<InviteCode, DocumentDat
       leagueId: str(d.leagueId),
       leagueName: str(d.leagueName),
       active: bool(d.active, true),
+    };
+  },
+};
+
+export const commentConverter: FirestoreDataConverter<Comment, DocumentData> = {
+  toFirestore: withoutId,
+  fromFirestore(snap: QueryDocumentSnapshot, options?: SnapshotOptions): Comment {
+    const d = snap.data(options) ?? {};
+    return {
+      id: snap.id,
+      legId: str(d.legId),
+      uid: str(d.uid),
+      name: str(d.name),
+      text: str(d.text),
+      createdAt: toDate(d.createdAt),
     };
   },
 };

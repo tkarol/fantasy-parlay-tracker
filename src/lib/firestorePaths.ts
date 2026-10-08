@@ -47,6 +47,26 @@ export const reactionDoc = (leagueId: string, weekId: string, legId: string, uid
   doc(db, "leagues", leagueId, "weeks", weekId, "reactions", reactionId(legId, uid));
 
 /**
+ * Comments on a week's legs. Auto-ids: unlike a reaction, someone can leave
+ * several, so the id cannot encode author and leg.
+ */
+export const commentsCol = (leagueId: string, weekId: string) =>
+  collection(db, "leagues", leagueId, "weeks", weekId, "comments");
+
+export const commentDoc = (leagueId: string, weekId: string, commentId: string) =>
+  doc(db, "leagues", leagueId, "weeks", weekId, "comments", commentId);
+
+/**
+ * How far each member has read their own activity.
+ *
+ * Its own collection rather than a field on the member document, which only
+ * admins may write — a member must be able to mark their own digest read
+ * without the rules having to allow them near their own `role`.
+ */
+export const seenDoc = (leagueId: string, uid: string) =>
+  doc(db, "leagues", leagueId, "seen", uid);
+
+/**
  * The week's ticket screenshot, in its own document.
  *
  * Kept out of the week document on purpose: the app subscribes to every week

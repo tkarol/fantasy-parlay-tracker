@@ -1,4 +1,5 @@
 import {
+  addDoc,
   arrayRemove,
   arrayUnion,
   deleteDoc,
@@ -16,6 +17,8 @@ import type { User } from "firebase/auth";
 import { db } from "../firebase";
 import {
   appLeagueDoc,
+  commentDoc,
+  commentsCol,
   inviteCodeDoc,
   joinRequestDoc,
   joinRequestsCol,
@@ -25,13 +28,22 @@ import {
   legsCol,
   reactionDoc,
   memberDoc,
+  seenDoc,
   ticketImageDoc,
   weekDoc,
 } from "./firestorePaths";
 import { leagueConverter } from "./converters";
 import { makeInviteCode, makeLeagueId, weekId as makeWeekId } from "./rand";
-import { DEFAULT_DEADLINE_RULE, nextDeadline, type DeadlineRule } from "./dates";
-import type { League, LegResult, Member, MemberRole, ReactionEmoji, Week } from "../types/models";
+import { DEFAULT_DEADLINE_RULE, nextDeadline, toDate, type DeadlineRule } from "./dates";
+import {
+  MAX_COMMENT_LENGTH,
+  type League,
+  type LegResult,
+  type Member,
+  type MemberRole,
+  type ReactionEmoji,
+  type Week,
+} from "../types/models";
 
 /**
  * Every Firestore write in the app lives here.
@@ -663,6 +675,8 @@ export async function setReaction(
     uid: user.uid,
     name: displayNameFor(user),
     emoji,
+    // Stamped so the activity digest can tell a new reaction from an old one.
+    createdAt: serverTimestamp(),
   });
 }
 
@@ -850,4 +864,62 @@ export async function removeTicketImage(leagueId: string, weekIdValue: string): 
   await updateDoc(weekDoc(leagueId, weekIdValue), { ticketImage: deleteField() }).catch(() => {
     // Same as above: absent is fine.
   });
+}
+
+// ---------------------------------------------------------------------------
+// Comments
+// ---------------------------------------------------------------------------
+
+/**
+ * Leave a comment on someone's leg.
+ *
+ * No deadline check on purpose: the point of commenting is the argument after
+ * the games, so a locked or closed week still takes them. Reactions already
+ * work the same way.
+ */
+export async function addComment(
+  leagueId: string,
+  weekIdValue: string,
+  legId: string,
+  user: User,
+  text: string,
+): Promise<void> {
+  await addDoc(commentsCol(leagueId, weekIdValue), {
+    legId,
+    uid: user.uid,
+    name: displayNameFor(user),
+    text: text.trim().slice(0, MAX_COMMENT_LENGTH),
+    createdAt: serverTimestamp(),
+  });
+}
+
+/** Take back your own comment. Admins can remove anyone's. */
+export async function deleteComment(
+  leagueId: string,
+  weekIdValue: string,
+  commentId: string,
+): Promise<void> {
+  await deleteDoc(commentDoc(leagueId, weekIdValue, commentId));
+}
+
+// ---------------------------------------------------------------------------
+// Activity digest
+// ---------------------------------------------------------------------------
+
+/**
+ * When this member last read the activity on their own legs.
+ *
+ * Absent for someone who has never been shown the digest; the caller treats
+ * that as "start from now" rather than replaying the whole season at them.
+ */
+export async function getLastSeenActivity(
+  leagueId: string,
+  uid: string,
+): Promise<Date | null> {
+  const snap = await getDoc(seenDoc(leagueId, uid));
+  return toDate(snap.data()?.lastSeenAt);
+}
+
+export async function markActivitySeen(leagueId: string, uid: string): Promise<void> {
+  await setDoc(seenDoc(leagueId, uid), { lastSeenAt: serverTimestamp() }, { merge: true });
 }

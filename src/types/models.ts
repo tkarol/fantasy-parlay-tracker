@@ -138,4 +138,24 @@ export interface Reaction {
   uid: string;
   name: string;
   emoji: ReactionEmoji;
+  /** Null on reactions written before this was recorded. */
+  createdAt: Date | null;
+}
+
+/** Long enough for a real dig, short enough to stay a comment. */
+export const MAX_COMMENT_LENGTH = 500;
+
+/**
+ * A comment on someone's leg.
+ *
+ * `legId` is the leg's document id, which for a member-submitted leg IS that
+ * member's uid — so "comments on my leg" needs no join, just `legId == myUid`.
+ */
+export interface Comment {
+  id: string;
+  legId: string;
+  uid: string;
+  name: string;
+  text: string;
+  createdAt: Date | null;
 }

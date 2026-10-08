@@ -165,6 +165,13 @@ service cloud.firestore {
           && (canAdmin(leagueId) || memberUid == uid());
       }
 
+      // ---------- activity read markers ----------
+      // Strictly private bookkeeping: nobody reads or writes anyone else's.
+
+      match /seen/{seenUid} {
+        allow read, write: if isMember(leagueId) && seenUid == uid();
+      }
+
       // ---------- join requests ----------
 
       match /joinRequests/{requestUid} {
@@ -215,6 +222,28 @@ service cloud.firestore {
             && request.resource.data.emoji.size() <= 8;
 
           allow delete: if isMember(leagueId) && resource.data.uid == uid();
+        }
+
+        // ---------- comments ----------
+        // Auto-id documents, so unlike reactions the id proves nothing. The
+        // author is pinned by the create rule and frozen afterwards.
+
+        match /comments/{commentId} {
+          allow read: if isMember(leagueId) || isOwner(leagueId);
+
+          allow create: if isMember(leagueId)
+            && request.resource.data.uid == uid()
+            && request.resource.data.legId is string
+            && request.resource.data.legId.size() > 0
+            && isText(request.resource.data.text, 500)
+            && isText(request.resource.data.name, 120);
+
+          // Comments are not editable: an edit after someone has replied
+          // rewrites the argument. Delete and say it again.
+          allow update: if false;
+
+          allow delete: if isMember(leagueId)
+            && (resource.data.uid == uid() || canAdmin(leagueId));
         }
 
         // ---------- ticket screenshot ----------

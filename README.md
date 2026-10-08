@@ -94,6 +94,31 @@ Until then a leg is marked *No odds* and the ticket simply shows no price, and
 the admin week bar says how many are still waiting. A member editing the wording
 of their pick afterwards does not disturb a price already recorded.
 
+### Comments and the catch-up
+
+Anyone can leave a reaction or a comment on anyone's leg, and neither is gated
+by the lock — the argument is the point, and it happens after the games, not
+before them. Comments cannot be edited (an edit after someone replies rewrites
+the argument); delete and say it again. You can remove your own, and an admin
+can remove anyone's.
+
+None of that is worth much if nobody sees it, and this is a page people open
+once on Sunday and not again until Thursday. So on the way in, a **While you
+were away** card lists what landed on *your* leg since you last looked —
+comments and reactions both, newest first. Dismissing it moves your read mark
+to now, so each piece of news is shown exactly once.
+
+That mark lives in `leagues/{id}/seen/{uid}`, a document only its own member
+can read or write — deliberately not a field on the member document, which
+only admins may write, so marking your own digest read never requires the
+rules to let you near your own `role`.
+
+Two details that keep it honest: someone signing in for the first time has
+their mark set to now rather than being handed a season of backlog, and a
+reaction with no timestamp (written before they were stamped) stays in the
+past instead of resurfacing as brand new. The scan covers the two most recent
+weeks and reads only rows whose `legId` is yours.
+
 ### Settlement rules
 
 Legs settle the way a sportsbook settles them:

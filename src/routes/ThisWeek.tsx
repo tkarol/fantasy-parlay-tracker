@@ -28,6 +28,7 @@ import { useAuth } from "../hooks/useAuth";
 import { useLeagueContext } from "../hooks/useLeagueContext";
 import { useLegs, useLegsByWeek } from "../hooks/useLegs";
 import { useReactions } from "../hooks/useReactions";
+import { useComments } from "../hooks/useComments";
 import { useNow } from "../hooks/useNow";
 import { describeFirestoreError } from "../hooks/firestoreState";
 import { isWeekOpen, settleWeek } from "../lib/parlay";
@@ -62,6 +63,7 @@ export default function ThisWeek() {
   const week = weeks.find((candidate) => candidate.id === selectedId) ?? null;
   const { legs, loading: legsLoading, error: legsError } = useLegs(leagueId ?? undefined, week?.id);
   const reactions = useReactions(leagueId ?? undefined, week?.id);
+  const comments = useComments(leagueId ?? undefined, week?.id);
 
   const settlement = useMemo(() => (week ? settleWeek(week, legs) : null), [week, legs]);
 
@@ -263,7 +265,9 @@ export default function ThisWeek() {
                     currentUid={user?.uid ?? null}
                     user={user}
                     reactions={reactions}
+                    comments={comments}
                     canReact={isMember}
+                    now={now}
                   />
                 </>
               )}

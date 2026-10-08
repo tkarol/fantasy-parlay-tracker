@@ -3,13 +3,21 @@ import type { User } from "firebase/auth";
 import { Badge, Button, ConfirmDialog, EmptyState, Input, Select } from "../ui";
 import { ResultBadge } from "./ResultBadge";
 import { LegReactions } from "./LegReactions";
+import { LegComments } from "./LegComments";
 import { resultAccent } from "./resultAccent";
 import { useToast } from "../../hooks/useToast";
 import { adminUpdateLeg, deleteLeg, gradeLeg, setLegOdds } from "../../lib/api";
 import { americanToDecimal, formatAmerican, parseAmerican } from "../../lib/odds";
 import { parsePick } from "../../lib/slip";
 import { QuickPrices } from "./OddsField";
-import { LEG_RESULTS, type Leg, type LegResult, type Reaction, type Week } from "../../types/models";
+import {
+  LEG_RESULTS,
+  type Comment,
+  type Leg,
+  type LegResult,
+  type Reaction,
+  type Week,
+} from "../../types/models";
 import { cn } from "../../lib/cn";
 
 export function LegList({
@@ -21,7 +29,9 @@ export function LegList({
   currentUid,
   user,
   reactions,
+  comments,
   canReact,
+  now,
 }: {
   leagueId: string;
   week: Week;
@@ -31,7 +41,9 @@ export function LegList({
   currentUid: string | null;
   user: User | null;
   reactions: Record<string, Reaction[]>;
+  comments: Record<string, Comment[]>;
   canReact: boolean;
+  now: Date;
 }) {
   const toast = useToast();
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -116,6 +128,16 @@ export function LegList({
                     reactions={reactions[leg.id] ?? []}
                     user={user}
                     canReact={canReact}
+                  />
+                  <LegComments
+                    leagueId={leagueId}
+                    weekId={week.id}
+                    legId={leg.id}
+                    comments={comments[leg.id] ?? []}
+                    user={user}
+                    canComment={canReact}
+                    isAdmin={isAdmin}
+                    now={now}
                   />
                 </div>
 

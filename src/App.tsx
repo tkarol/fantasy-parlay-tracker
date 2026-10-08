@@ -1,6 +1,7 @@
 import { Navigate, Outlet, Route, Routes } from "react-router-dom";
 import { NavBar } from "./components/NavBar";
 import { AccessGate } from "./components/AccessGate";
+import { ActivityDigest } from "./components/ActivityDigest";
 import { LeagueProvider } from "./providers/LeagueProvider";
 import ThisWeek from "./routes/ThisWeek";
 import Stats from "./routes/Stats";
@@ -12,6 +13,9 @@ function Layout() {
       <NavBar />
       <main>
         <AccessGate>
+          {/* Sits above the routes so the catch-up shows wherever someone
+              lands, not only on the week page. */}
+          <ActivityDigest />
           <Outlet />
         </AccessGate>
       </main>

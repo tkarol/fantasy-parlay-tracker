@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { onSnapshot } from "firebase/firestore";
 import { reactionsCol } from "../lib/firestorePaths";
+import { toDate } from "../lib/dates";
 import { isReactionEmoji, type Reaction } from "../types/models";
 
 /**
@@ -34,6 +35,7 @@ export function useReactions(leagueId: string | undefined, weekId: string | unde
             uid,
             name: typeof data.name === "string" ? data.name : "",
             emoji,
+            createdAt: toDate(data.createdAt),
           };
           (next[legId] ??= []).push(reaction);
         }
